@@ -7,7 +7,7 @@ This Application Package provides a CWL document that performs inference by appl
 To execute the application, users have the option to use either [cwltool](https://github.com/common-workflow-language/cwltool) or [Calrissian](https://github.com/Duke-GCB/calrissian) as the CWL runner.
 
 ## Inputs:
-- `input_reference`: A list of reference to a Sentinel-2 product on [planetary computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). The application will give you an accurate result if the sentinel-2 product has no/low cloud-cover.
+- `input_reference`: A list of Sentinel-2 product references from [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). Note: the inference application provides accurate results only when the Sentinel-2 product has low or no cloud cover. High cloud coverage may significantly reduce prediction accuracy.
 
 ## How to Execute the Application Package
 
@@ -23,13 +23,13 @@ curl -L -o "tile-sat-inference.cwl" \
 ### **Run the Application Package**:
 There are two methods to execute the application:
 
-- Executing the `tile-sat-inference` app using `cwltool`:
+- Executing `tile-sat-inference` using `cwltool`:
 
     ```bash
     cwltool --podman --debug --parallel tile-sat-inference.cwl#tile-sat-inference params.yml
     ```
 
-- Executing the `tile-sat-inference` using `calrissian`:
+- Executing `tile-sat-inference` using `calrissian`:
 
     ```bash
     
@@ -39,16 +39,14 @@ There are two methods to execute the application:
   >
   >   `kubectl get pods` 
 
-## How the CWL document designed:
-The CWL file can be triggered using `cwltool` or `calrissian`. The user provides a `params.yml` file that passes all inputs needed by the CWL file to execute the module. The CWL file is designed to execute the module based on the structure below:
+## How the CWL document is designed:
+The CWL file can be triggered using `cwltool` or `calrissian`. The execution requires a `params.yml` file, which supplies all the necessary inputs defined in the CWL specification. The workflow is structured to run the module according to the diagram outlined below:
 
-![Inference Workflow](imgs/inference.png)
+![image](imgs/inference.png "Inference Workflow")
 
-> **`[]`** in the image above indicates that the user may pass a list of parameters to the application package.
-
-The Application Package will generate a list of directories containing intermediate or final output. The number of folders containing a `{STAC_ITEM_ID}_classified.tif` and the corresponding STAC objects, such as STAC Catalog and STAC Item, depends on the number of input Sentinel-2 items.
+The Application Package will generate a number of directories containing intermediate and final outputs. Each directory will contain a `{STAC_ITEM_ID}_classified.tif` file, along with the corresponding STAC objects (i.e. the STAC Catalog and STAC Item). The number of directories depends on the number of input Sentinel-2 products provided. 
 
 
 ## Troubleshooting
 
-The user might encounter to memory issues during the execution with CWL Runners(especially with the `cwltool`). This can be addressing by reducing the `ramMax`(e.g. `ramMax: 1000`) parameter in the cwl file.
+Users might encounter memory-related issues when executing workflows with CWL Runners (especially with `cwltool`). These issues can often be mitigated by reducing the `ramMax` parameter (e.g. `ramMax: 1000`) specified in the CWL file, which can help prevent excessive memory allocation.
