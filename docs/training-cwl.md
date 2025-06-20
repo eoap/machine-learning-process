@@ -1,6 +1,6 @@
 # Training Module & CWL Runner
 
-This Application Package provides a CWL document containing a top-level workflow with a singleCommandLineToolstep that executes the training pipeline. It also supports **parallel execution**, allowing users to specify multiple sets of hyperparameter or training configurations. This makes it suitable for large-scale experiments and hyperparameter tuning on platforms like a Minikube cluster.
+This Application Package provides a CWL document containing a top-level workflow with a single `CommandLineTool` step that executes the training pipeline. It also supports **parallel execution**, allowing users to specify multiple sets of hyperparameter or training configurations. This makes it suitable for large-scale experiments and hyperparameter tuning on platforms like a Minikube cluster.
 
 To execute the training workflow, users can choose between [cwltool](https://github.com/common-workflow-language/cwltool) and [Calrissian](https://github.com/Duke-GCB/calrissian) as their CWL runners.
 
@@ -23,7 +23,7 @@ To execute the training workflow, users can choose between [cwltool](https://git
 | SAMPLES_PER_CLASS      | int      | Number of samples to use for training per class. |
 
 
-## How to execute the application-package?
+## How to execute the Application Ppackage?
 Before running the application with a CWL runner, make sure to download and use the latest version of the CWL document:
 ```
 cd training/app-package
@@ -34,44 +34,38 @@ curl -L -o "tile-sat-training.cwl" \
 ```
 
 
-### **Run the Application package**:
+### **Run the Application Package**:
 There are two methods to execute the application:
 
-- Executing the tile-based-training using cwltool in a terminal:
 
+- Executing the tile-based-training using `cwltool` in a terminal:
    ```
     cwltool --podman --debug --parallel tile-sat-training.cwl#tile-sat-training params.yaml
    ```
     
 
 
-- Executing the tile-based classification using calrissian in a terminal:
+- Executing the tile-based classification using `calrissian` in a terminal:
 
    ```
     calrissian --debug --stdout /calrissian/out.json --stderr /calrissian/stderr.log --usage-report /calrissian/report.json --parallel --max-ram 10G --max-cores 2 --tmp-outdir-prefix /calrissian/tmp/ --outdir /calrissian/results/ --tool-logs-basepath /calrissian/logs tile-sat-training.cwl#tile-sat-training params.yaml
    ```
-   > You can monitor the pod creation using command below:
+   > You can monitor the pod creation using `kubectl` command below:
    >
    >   `kubectl get pods` 
 
 
+## How the CWL document is designed:
+The CWL workflow can be executed using either `cwltool` or `calrissian`. The execution requires a `params.yml` file, which supplies all the necessary inputs defined in the CWL specification. The workflow is structured to run the module according to the diagram outlined below:
 
-
-## How the CWL document designed:
-The CWL file can be triggered using `cwltool` or `calrissian`. The user provides a `params.yml` file that passes all inputs needed by the CWL file to execute the module. The CWL file is designed to execute the module based on the structure below:
-
-![Training Workflow](imgs/training.png)
-
+![image](imgs/training.png "Training Workflow")
 
 > **`[]`** in the image above indicates that the user may pass a list of parameters to the application package.
 
 ## For developers
 
-The user may train several tile-based classifiers using the CWL runner. One of the tracked artifacts through MLflow is the model's weights. The next step is to retrieve the best model, based on the desired evaluation metric, from the MLflow artifact registry and convert it to the ONNX format. This activity is explained in ["Export the Best Model to ONNX Format"](./extract-model.md). Finally, this model can be integrated into the inference application package.
-
-> **Note:** This process has already been completed. However, users may need to repeat it with their own candidate models.
-
+Users can train multiple tile-based classifiers using the CWL runner, with model weights tracked as artifacts in MLflow. Once training is complete, the next step is to retrieve the best-performing model, based on the chosen evaluation metric, from the MLflow artifact registry and convert it to ONNX format. This process is detailed in the ["Export the Best Model to ONNX Format"](./extract-model.md) guide. The resulting ONNX model can then be integrated into the inference application package.
 
 ## Troubleshooting
 
-The user might encounter to memory issues during the execution with CWL Runners(especially with the `cwltool`). This can be addressing by reducing the `ramMax`(e.g. `ramMax: 1000`) parameter in the cwl file.
+Users might encounter memory-related issues when executing workflows with CWL Runners (especially with `cwltool`). These issues can often be mitigated by reducing the `ramMax` parameter (e.g. `ramMax: 1000`) specified in the CWL file, which can help prevent excessive memory allocation.

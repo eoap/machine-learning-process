@@ -1,18 +1,22 @@
 # Inference container:
 
-This module enables users to create an inference pipeline that take a Sentinel-2 STAC Item from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections), and generates a binary mask TIFF image using a pre-trained CNN model. For details on how the model was trained, refer to the [training container documentation](./training-container.md).
+This module enables users to create an inference pipeline that takes a Sentinel-2 STAC Item from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections), and generates a binary mask TIFF image using a pre-trained CNN model. For details on how the model was trained, refer to the [training container documentation](./training-container.md).
 
 
 
-## **Make Inference Module:**
+## **`Make Inference` Module:**
 
 **Inputs**:
-- `input_reference`: The reference to a Sentinel-2 product on [planetary computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). The application will give you an accurate result if the sentinel-2 product has no/low cloud-cover.
+ 
+- `input_reference`: A list of Sentinel-2 product references from [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). Note: the inference application provides accurate results only when the Sentinel-2 product has low or no cloud cover. High cloud coverage may significantly reduce prediction accuracy.
 
 **Outputs**:
 
-- `{STAC_ITEM_ID}_classified.tif`: A binary `.tif` image in `COG` format classifies:
+- `{STAC_ITEM_ID}_classified.tif`: A binary `.tif` image in `COG` format containing the full-resolution land cover classification predicted by the model, with each pixel assigned to a land cover class as defined in the table below. 
+- `overview_{STAC_ITEM_ID}_classified.tif`: A binary `.tif` image in `COG` format containing lower-resolution overview of the classification result, generated to support fast visualisation and efficient browsing across zoom levels. 
+- `STAC objects`: STAC objects related to the provided masks, including STAC Catalog and STAC Item.
 
+*Land Cover Classes*
 | Class ID | Class Name            |
 |----------|-----------------------|
 | 0        | AnnualCrop            |
@@ -27,28 +31,12 @@ This module enables users to create an inference pipeline that take a Sentinel-2
 | 9        | SeaLake               |
 | 10       | No Data               |
 
-- `overview_{STAC_ITEM_ID}_classified.tif`: A binary `.tif` image in `COG` format classifies:
-
-| Class ID | Class Name            |
-|----------|-----------------------|
-| 0        | AnnualCrop            |
-| 1        | Forest                |
-| 2        | HerbaceousVegetation  |
-| 3        | Highway               |
-| 4        | Industrial            |
-| 5        | Pasture               |
-| 6        | PermanentCrop         |
-| 7        | Residential           |
-| 8        | River                 |
-| 9        | SeaLake               |
-| 10       | No Data               |
-
-- `STAC objects`: STAC objects related to the provided masks, including STAC catalog and STAC Item.
 
 ## How the Application Works
 
-The application begins by reading a Sentinel-2 STAC Item from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). It then filters and selects 12 specific asset references in the order expected by the machine learning model. These assets correspond to common Sentinel-2 bands, as shown below:
+The application begins by reading the input Sentinel-2 STAC Item(s) from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections) and then extracting the 12 common Sentinel-2 spectral bands (see table below), ordered to match those expected by the trained ML model. 
 
+*Sentinel-2 Spectral Bands*
 | Index | Asset Key  | Asset Common Name |
 |-------|------------|-------------------|
 | 1     | B01        | Coastal           |
@@ -64,11 +52,11 @@ The application begins by reading a Sentinel-2 STAC Item from the [Planetary Com
 | 11    | B11        | SWIR 1 (16)       |
 | 12    | B12        | SWIR 2 (22)       |
 
-As a preprocessing step, all selected assets are resampled to a uniform resolution of 10 meters.
+As part of the preprocessing, all selected bands are resampled to a consistent spatial resolution of 10 meters.
 
-The pipeline then proceeds with a sliding window approach: it reads and stacks small image chips from the selected bands in the order listed above. These chips are fed into a trained CNN model, which predicts the corresponding class for each chip.
+The pipeline then proceeds with a sliding window approach: it reads and stacks small image chips from the resampled bands (in the specified order), forming multi-band input arrays. These image chips are fed to the trained CNN model, which predicts the corresponding LC class for each chip.
 
-Finally, the application generates:
-- The classification prediction map (as a GeoTIFF mask)
+At the end of the process, the application generates:
+- The LC classification prediction map (COG mask)
 - A visual overview image
-- An updated STAC item containing metadata and references to the output files
+- An updated STAC Catalog and Item containing metadata and references to the output files.
