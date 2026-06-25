@@ -1,0 +1,37 @@
+stac_endpoint_url: https://ai-extensions-stac.terradue.com/collections/Euro_SAT
+BATCH_SIZE: 4
+EPOCHS: 3
+LEARNING_RATE: 0.0001
+DECAY: 0.1  ### float
+EPSILON: 0.000002
+MEMENTUM: 0.95
+# choose one of binary_crossentropy/cosine_similarity/mean_absolute_error/mean_squared_logarithmic_error
+# squared_hinge
+LOSS: categorical_crossentropy  
+# choose one of  l1,l2,None
+REGULIZER: None
+# try Adam/SGD/RMSprop
+OPTIMIZER: Adam
+###############################################################
+###############################################################
+# Dataset
+SAMPLES_PER_CLASS: 10
+CLASSES: 10
+IMAGE_SIZE: [64, 64, 13]
+enable_data_ingestion: True
+##############################################################
+##############################################################
+# AWS
+# AWS
+ADES_AWS_S3_ENDPOINT: https://s3.fr-par.scw.cloud #ADES_AWS_S3_ENDPOINT 
+ADES_AWS_REGION: fr-par # ADES_AWS_REGION 
+ADES_AWS_DEFAULT_REGION: fr-par #ADES_AWS_DEFAULT_REGION 
+ADES_AWS_ACCESS_KEY_ID:  #ADES_AWS_ACCESS_KEY_ID 
+ADES_AWS_SECRET_ACCESS_KEY:  # ADES_AWS_SECRET_ACCESS_KEY 
+ADES_BUCKET_NAME: ai-ext-bucket-dev # ADES_BUCKET_NAME ai-ext-bucket-dev
+##############################################################
+##############################################################
+# STAC
+ADES_IAM_URL:  # ADES_IAM_URL
+ADES_IAM_PASSWORD:  #ADES_IAM_PASSWORD
+MLFLOW_TRACKING_URI: http://my-mlflow:5000
