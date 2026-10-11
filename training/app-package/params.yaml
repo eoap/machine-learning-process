@@ -1,36 +1,33 @@
-MLFLOW_TRACKING_URI: http://my-mlflow:5000
-stac_reference: "https://raw.githubusercontent.com/eoap/machine-learning-process/main/training/app-package/EUROSAT-Training-Dataset/catalog.json"
-BATCH_SIZE: 
-    - 2
-    - 4
+MLFLOW_TRACKING_URI:
+  value: http://my-mlflow:5000
+stac_reference:
+  value: https://raw.githubusercontent.com/eoap/machine-learning-process/main/training/app-package/EUROSAT-Training-Dataset/catalog.json
+BATCH_SIZE:
+- 2
+- 4
 CLASSES: 10
-DECAY: 
-    - 0.1
-    - 0.5
-EPOCHS: 
-    - 3
-    - 5
-EPSILON: 
-    - 0.000001
-    - 0.000005
-LEARNING_RATE: 
-    - 0.0001
-    - 0.0005
-    
-LOSS: 
-    # choose one of binary_crossentropy/cosine_similarity/mean_absolute_error/mean_squared_logarithmic_error
-    # squared_hinge
-    - categorical_crossentropy
-    - categorical_crossentropy  
-MEMENTUM: 
-    - 0.95
-    - 0.79
-OPTIMIZER: 
-    # choose one of Adam, SGD, RMSprop
-    - Adam
-    - SGD
-REGULARIZER: 
-    # choose one of  l1,l2,None
-    - None
-    - l1l2
+DECAY:
+- 0.1
+- 0.5
+EPOCHS:
+- 3
+- 5
+EPSILON:
+- 1.0e-06
+- 5.0e-06
+LEARNING_RATE:
+- 0.0001
+- 0.0005
+LOSS:
+- categorical_crossentropy
+- categorical_crossentropy
+MEMENTUM:
+- 0.95
+- 0.79
+OPTIMIZER:
+- Adam
+- SGD
+REGULARIZER:
+- None
+- l1l2
 SAMPLES_PER_CLASS: 10

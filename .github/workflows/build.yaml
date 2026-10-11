@@ -1,56 +1,48 @@
-name: build
-
+name: Release
 on:
-  push:
-    branches:
-      - main
-      - master
-      - develop
-    paths:
-      - 'inference/**'
-      - 'training/**'
-      - 'inference/app-package/**'
-      - 'training/app-package/**'
-      - '.github/workflows/build.yaml'
-      - 'codemeta.json'
-
-env:
-  GHCR_REPO: ghcr.io/eoap/machine-learning-process
-
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        options: [candidate, stable]
+        default: candidate
+permissions:
+  contents: read
+concurrency:
+  group: application-release
+  cancel-in-progress: false
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.x
-
-      - run: pip install cwltool
-
-      - run: cwltool --validate training/app-package/tile-sat-training.cwl
-      - run: cwltool --validate inference/app-package/tile-sat-inference.cwl
-
+  checks:
+    uses: ./.github/workflows/checks.yml
+  notebooks:
+    uses: ./.github/workflows/notebook-acceptance.yml
   version:
-    needs: validate
+    needs: [checks, notebooks]
     runs-on: ubuntu-latest
     outputs:
-      app-version: ${{ steps.set-version.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v2
-
-      - id: set-version
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
-          version=$(jq -r .version codemeta.json)
-          if [[ -z "$version" || "$version" == "null" ]]; then
-            echo "❌ ERROR: Version is missing in codemeta.json"
-            exit 1
+          version=$(jq -er .version codemeta.json)
+          grep -Fq "## [$version]" CHANGELOG.md
+          if [[ "$CHANNEL" == candidate ]]; then
+            version="$version-rc.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
+          else
+            [[ "$GITHUB_REF" == refs/heads/main || "$GITHUB_REF" == refs/heads/master ]]
+            python scripts/check-acceptance.py docs/acceptance/stable.json
           fi
-          echo "version=$version" >> $GITHUB_OUTPUT
-          echo "📦 App version: $version"
-
-  container-build:
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' > /tmp/tags
+          ! grep -Fxq "$version" /tmp/tags
+          gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$version" --jq '.[].ref' > /tmp/refs
+          ! grep -Fxq "refs/tags/$version" /tmp/refs
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  images:
     needs: version
     runs-on: ubuntu-latest
     permissions:
@@ -58,121 +50,123 @@ jobs:
       packages: write
     strategy:
       matrix:
-        include:
-          - name: training
-            path: make-ml-model
-          - name: inference
-            path: make-inference
+        kind: [training, inference]
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Build and Push Docker Image
+      - uses: actions/checkout@v4
+      - uses: oras-project/setup-oras@v1
+        with: {version: '1.3.0'}
+      - name: Build and authenticate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          KIND: ${{ matrix.kind }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
-          IMAGE_NAME=${{ env.GHCR_REPO }}/${{ matrix.name }}
-          VERSION=${{ needs.version.outputs.app-version }}
-          DOCKERFILE=${{ matrix.name }}/${{ matrix.path }}/Dockerfile
-          CONTEXT=${{ matrix.name }}/${{ matrix.path }}
-
-          echo "🔨 Building $IMAGE_NAME:$VERSION"
-          docker build "$CONTEXT" -f "$DOCKERFILE" -t "$IMAGE_NAME:$VERSION"
-
-          echo "📤 Pushing $IMAGE_NAME:$VERSION"
-          docker push "$IMAGE_NAME:$VERSION"
-
-  create-release:
-    needs: [container-build, version]
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          echo "$GH_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/$KIND:$VERSION"
+          if [[ "$CHANNEL" == stable ]]; then
+            accepted=$(jq -er --arg kind "$KIND" '.images[$kind]' docs/acceptance/stable.json)
+            [[ "$accepted" == "ghcr.io/${GITHUB_REPOSITORY,,}/$KIND@sha256:"* ]]
+            docker pull "$accepted"
+            echo "IMAGE_SCAN=$accepted" >> "$GITHUB_ENV"
+          else
+            package=make-inference
+            [[ "$KIND" == inference ]] || package=make-ml-model
+            docker build -f "$KIND/$package/Dockerfile" -t "$image" .
+            echo "IMAGE_SCAN=$image" >> "$GITHUB_ENV"
+          fi
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+      - uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: 'v0.69.3'
+          image-ref: ${{ env.IMAGE_SCAN }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: scan.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scan-${{ matrix.kind }}
+          path: scan.json
+      - name: Publish immutable image
+        env:
+          KIND: ${{ matrix.kind }}
+          VERSION: ${{ needs.version.outputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          repository="${IMAGE%:*}"
+          oras repo tags "$repository" > /tmp/image-tags 2>/tmp/registry-error || {
+            grep -Eq 'NAME_UNKNOWN|name unknown|404' /tmp/registry-error || { cat /tmp/registry-error; exit 1; }
+          }
+          ! grep -Fxq "$VERSION" /tmp/image-tags
+          if [[ "$CHANNEL" == stable ]]; then
+            oras cp "$IMAGE_SCAN" "$IMAGE"
+          else
+            docker push "$IMAGE"
+          fi
+          mkdir -p digests
+          digest=$(oras resolve "$IMAGE")
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          if [[ "$CHANNEL" == stable ]]; then [[ "$digest" == "${IMAGE_SCAN##*@}" ]]; fi
+          printf '%s@%s\n' "$repository" "$digest" > "digests/$KIND.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.kind }}
+          path: digests
+  publish:
+    needs: [version, images]
     runs-on: ubuntu-latest
+    environment: ${{ inputs.channel == 'stable' && 'stable-release' || 'candidate-release' }}
     permissions:
       contents: write
-    outputs:
-      upload_url: ${{ steps.create.outputs.upload_url }}
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Create GitHub Release
-        id: create
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ needs.version.outputs.app-version }}
-          release_name: Release ${{ needs.version.outputs.app-version }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-artifacts:
-    needs: [create-release, version]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write  
       packages: write
-      
-    strategy:
-      matrix:
-        include:
-          - name: tile-sat-training
-            step: training
-            cwl_path: training/app-package/tile-sat-training.cwl
-          - name: tile-sat-inference
-            step: inference
-            cwl_path: inference/app-package/tile-sat-inference.cwl
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      CHANNEL: ${{ inputs.channel }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Pull Image and Extract Digest
-        id: digest
-        run: |
-          IMAGE="${{ env.GHCR_REPO }}/${{ matrix.step }}:${{ needs.version.outputs.app-version }}"
-          echo "📥 Pulling image: $IMAGE"
-          docker pull "$IMAGE"
-          SHA_TAG=$(docker inspect "$IMAGE" | jq -r '.[0].RepoDigests[0]')
-          echo "digest=$SHA_TAG" >> $GITHUB_OUTPUT
-          echo "🔑 Image digest: $SHA_TAG"
-
-      - name: Update Docker Image in CWL
-        run: |
-          yq -i '(.["$graph"][] | select(.class == "CommandLineTool")).hints.DockerRequirement.dockerPull = "${{ steps.digest.outputs.digest }}"' "${{ matrix.cwl_path }}"
-
-          echo "✅ Updated Docker image in CWL"
-
-      - name: Update Metadata in CWL
-        run: |
-          VERSION="${{ needs.version.outputs.app-version }}"          
-          AUTHOR_NAME=$(jq -r '.author[0].givenName + " " + .author[0].familyName' codemeta.json)
-          AUTHOR_EMAIL=$(jq -r '.author[0].email' codemeta.json)
-          AUTHOR_AFFIL=$(jq -r '.author[0].affiliation.name' codemeta.json)
-          REPO_URL=$(jq -r '.codeRepository' codemeta.json)
-        
-          echo "📎 REPO_URL: $REPO_URL"
-        
-          yq -i ".\"s:codeRepository\" = {\"URL\": \"$REPO_URL\"}" "${{ matrix.cwl_path }}"
-          yq -i ".\"s:softwareVersion\" = \"$VERSION\"" "${{ matrix.cwl_path }}"
-          yq -i ".\"s:author\" = [{\"class\": \"s:Person\", \"s.name\": \"$AUTHOR_NAME\", \"s.email\": \"$AUTHOR_EMAIL\", \"s.affiliation\": \"$AUTHOR_AFFIL\"}]" "${{ matrix.cwl_path }}"
-        
-          echo "✅ Updated metadata in ${{ matrix.cwl_path }}"
-        
-
-      - name: Prepare Artifacts
-        run: |
-          mkdir -p downloads
-          cp "${{ matrix.cwl_path }}" "downloads/${{ matrix.name }}.${{ needs.version.outputs.app-version }}.cwl"
-
-      - name: Upload CWL as Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: oras-project/setup-oras@v1
+        with: {version: '1.3.0'}
+      - uses: actions/download-artifact@v4
         with:
-          name: application-package-${{ matrix.name }}
-          path: downloads
-          overwrite: true
-
-      - name: Upload to GitHub Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: downloads/${{ matrix.name }}.${{ needs.version.outputs.app-version }}.cwl
-          asset_name: ${{ matrix.name }}.${{ needs.version.outputs.app-version }}.cwl
-          asset_content_type: text/yaml
+          pattern: digest-*
+          merge-multiple: true
+          path: digests
+      - run: python -m pip install --require-hashes -r requirements/development.txt
+      - run: python scripts/build-release.py --version "$VERSION" --digests digests --output downloads
+      - name: Publish and verify OCI packages
+        run: |
+          echo "$GH_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for kind in training inference; do
+            repository="ghcr.io/${GITHUB_REPOSITORY,,}/cwl/tile-sat-$kind"
+            target="$repository:$VERSION"
+            oras repo tags "$repository" > /tmp/cwl-tags 2>/tmp/registry-error || {
+              grep -Eq 'NAME_UNKNOWN|name unknown|404' /tmp/registry-error || { cat /tmp/registry-error; exit 1; }
+            }
+            ! grep -Fxq "$VERSION" /tmp/cwl-tags
+            file="tile-sat-$kind.$VERSION.cwl"
+            (cd downloads && oras push --artifact-type application/cwl --annotation-file "$kind.annotations.json" "$target" "$file:application/cwl")
+            digest=$(oras resolve "$target")
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            reference="$repository@$digest"
+            oras pull "$reference" -o "verified/$kind"
+            cmp "downloads/$file" "verified/$kind/$file"
+            cwltool --validate "verified/$kind/$file#main"
+            oras manifest fetch "$reference" > "downloads/$kind.manifest.json"
+            jq -e --slurpfile expected "downloads/$kind.annotations.json" '.annotations as $actual | $expected[0]."$manifest" | to_entries | all(.[]; $actual[.key] == .value)' "downloads/$kind.manifest.json"
+            printf '%s\n' "$reference" >> downloads/oci-artifacts.txt
+          done
+      - name: Create draft, attach verified artifacts, publish
+        run: |
+          flags=()
+          if [[ "$CHANNEL" == candidate ]]; then flags+=(--prerelease --latest=false); fi
+          gh release create "$VERSION" --target "$GITHUB_SHA" --draft "${flags[@]}" --notes-file CHANGELOG.md
+          gh release upload "$VERSION" downloads/*
+          gh release edit "$VERSION" --draft=false

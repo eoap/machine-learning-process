@@ -1,9 +1,9 @@
-import tensorflow as tf
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
-from tensorflow.keras.layers import Conv2D, MaxPooling2D
 from pathlib import Path
+
+import tensorflow as tf
+from tensorflow.keras.layers import Activation, Conv2D, Dense, Dropout, Flatten, MaxPooling2D
+from tensorflow.keras.models import Sequential
+
 from tile_based_training.entity.config_entity import PrepareBaseModelConfig
 
 
@@ -13,16 +13,17 @@ class PrepareBaseModel:
 
     @staticmethod
     def _model_architecture(
-        input_shape=[64, 64, 12],
-        kernel_regularizer=None,
-        number_of_classes=10,
-        lr=0.01,
-        epsilon=1e-7,
-        momentum=0.9,
-        decay=None,
-        loss="categorical_crossentropy",
-        optimizer="Adam",
-    ):
+        input_shape: tuple[int, int, int] = (64, 64, 12),
+        kernel_regularizer: str | tf.keras.regularizers.Regularizer | None = None,
+        number_of_classes: int = 10,
+        lr: float = 0.01,
+        epsilon: float = 1e-7,
+        momentum: float = 0.9,
+        decay: float | None = None,
+        loss: str = "categorical_crossentropy",
+        optimizer: str = "Adam",
+    ) -> tf.keras.Model:
+        """Build and compile the configured EuroSAT convolutional classifier."""
         if kernel_regularizer == "None":
             kernel_regularizer = None
         model = Sequential()

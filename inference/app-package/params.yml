@@ -1,3 +1,2 @@
 input_reference:
-  - https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-2-l2a/items/S2C_MSIL2A_20250420T093051_R136_T35ULS_20250420T125212 
-  # - https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20230626T071619_R006_T39SWV_20240928T052855 
+- value: https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-2-l2a/items/S2C_MSIL2A_20250420T093051_R136_T35ULS_20250420T125212

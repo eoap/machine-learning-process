@@ -1,0 +1,17 @@
+-r runtime.in
+pytest>=8,<9
+build>=1.2,<2
+hatchling>=1.27,<2
+ruff>=0.14,<1
+mypy>=1.19,<2
+bandit>=1.9,<2
+cwltool==3.2.20260720092025
+mkdocs-material>=9.6,<10
+mkdocs-mermaid2-plugin>=1.2,<2
+mkdocs-puml>=2,<3
+ipykernel>=6,<7
+nbconvert>=7,<8
+bash-kernel>=0.10,<1
+types-PyYAML>=6,<7
+editables>=0.5,<1
+hatch>=1.14,<2

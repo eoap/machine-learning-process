@@ -16,7 +16,7 @@ class DataIngestionConfig:
 class PrepareBaseModelConfig:
     root_dir: Path
     model_path: Path
-   
+
     params_learning_rate: float
     params_classes: int
     params_decay: float
@@ -41,7 +41,7 @@ class TrainingConfig:
     base_model_path: Path
     params_epochs: int
     params_batch_size: int
-    
+
     classes_number: int
 
 

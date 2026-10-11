@@ -1,0 +1,110 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "eoap-machine-learning-process"
+version = "0.1.0"
+description = "EuroSAT training, ONNX inference and STAC machine learning model metadata"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+dependencies = [
+  "PyYAML>=6,<7",
+  "boto3>=1.35,<2",
+  "click>=8.1,<9",
+  "duckdb>=1.1,<2",
+  "ensure>=1,<2",
+  "folium>=0.18,<1",
+  "geojson>=3,<4",
+  "geopandas>=1,<2",
+  "joblib>=1.4,<2",
+  "loguru>=0.7,<1",
+  "matplotlib>=3.9,<4",
+  "mlflow==3.17.0",
+  "numpy==1.26.4",
+  "onnx==1.23.2",
+  "onnxruntime==1.31.0",
+  "pandas>=2.2,<3",
+  "planetary-computer>=1,<2",
+  "protobuf>=6.33.5,<8",
+  "pyarrow>=23.0.1,<26",
+  "pyproj>=3.6,<4",
+  "pystac-client>=0.8,<1",
+  "pystac[validation] @ git+https://github.com/Terradue/pystac.git@t2_extensions",
+  "python-box>=7,<8",
+  "rasterio>=1.4,<2",
+  "requests>=2.32,<3",
+  "rio-stac>=0.10,<1",
+  "scikit-learn>=1.5,<2",
+  "seaborn>=0.13,<1",
+  "shapely>=2,<3",
+  "stac-geoparquet>=0.6,<1",
+  "tensorflow==2.21.0",
+  "tf2onnx==1.17.0",
+  "tqdm>=4.66,<5",
+  "tzdata"
+]
+
+[project.scripts]
+tile-based-training = "tile_based_training.main:main"
+export-ml-model = "tile_based_training.export:main"
+make-inference = "make_inference.main:main"
+
+[project.urls]
+Documentation = "https://eoap.github.io/machine-learning-process/"
+Source = "https://github.com/eoap/machine-learning-process"
+Issues = "https://github.com/eoap/machine-learning-process/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["training/make-ml-model/src/tile_based_training", "inference/make-inference/src/make_inference", "MLM/src/mlm"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/training/make-ml-model", "/inference/make-inference", "/MLM/src", "/MLM/pyproject.toml", "/docs", "/scripts", "/tests", "/vendor", "/requirements", "/README.md", "/LICENSE", "/pyproject.toml", "/Dockerfile", "/Taskfile.yaml"]
+
+# The hash-locked environment supplies both the tools and application dependencies.
+[tool.hatch.envs.dev]
+skip-install = true
+installer = "uv"
+post-install-commands = ["uv pip install --require-hashes -r requirements/development.txt", "uv pip install --no-deps --no-build-isolation -e training/make-ml-model -e inference/make-inference -e MLM"]
+template = "dev"
+python = "3.12"
+
+[tool.hatch.envs.dev.env-vars]
+TF_NUM_INTRAOP_THREADS = "1"
+TF_NUM_INTEROP_THREADS = "1"
+CUDA_VISIBLE_DEVICES = "-1"
+
+[tool.hatch.envs.dev.scripts]
+check = ["bootstrap", "format-check", "lint-check", "typecheck", "security"]
+format-check = "ruff format --check training/make-ml-model/src inference/make-inference/src MLM/src scripts tests"
+lint-check = "ruff check training/make-ml-model/src inference/make-inference/src MLM/src scripts tests"
+typecheck = "mypy scripts/check-contracts.py scripts/create-fixture.py training/make-ml-model/src/tile_based_training/export.py MLM/src/mlm/describe.py scripts/stage-fixture.py"
+security = "bandit -r training/make-ml-model/src inference/make-inference/src MLM/src scripts -ll"
+bootstrap = ["uv pip install --require-hashes -r requirements/development.txt", "uv pip install --no-deps --no-build-isolation -e training/make-ml-model -e inference/make-inference -e MLM"]
+
+[tool.hatch.envs.test]
+template = "dev"
+[tool.hatch.envs.test.scripts]
+test = ["bootstrap", "pytest -q {args}"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "SIM", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = true

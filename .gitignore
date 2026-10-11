@@ -9,7 +9,6 @@ training/make-ml-model/envs
 training/make-ml-model/mlartifacts
 training/make-ml-model/mlruns
 mlruns
-# .dockerignore
 __pycache__
 *.pyc
 .git
@@ -27,6 +26,15 @@ dist/**
 *.jpeg
 *.jpg
 *.png
-.dockerignore
 data/*
 *__pycache__*
+
+runs/
+site/
+output/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Local build outputs; vendored dependency wheels remain versioned.
+**/dist/

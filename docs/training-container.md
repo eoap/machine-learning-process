@@ -1,8 +1,8 @@
 # Training a Machine Learning Model- Container
 
-This tutorial contains a Python application for training a deep learning model on EuroSAT dataset for tile-based classification task, and employs [MLflow](https://mlflow.org/) for monitoring the ML model development cycle. MLflow is a crucial tool that ensures effective log tracking and preserves key information, including specific code versions, datasets used, and model hyperparameters. By logging this information, the reproducibility of the work drastically increases, enabling users to revisit and replicate past experiments accurately. Moreover, quality metrics such as classification accuracy, loss function fluctuations, and inference time are also tracked, enabling easy comparison between different models. 
+This tutorial contains a Python application for training a deep learning model on EuroSAT dataset for tile-based classification task, and employs [MLflow](https://mlflow.org/) for monitoring the ML model development cycle. MLflow is a crucial tool that ensures effective log tracking and preserves key information, including specific code versions, datasets used, and model hyperparameters. By logging this information, the reproducibility of the work drastically increases, enabling users to revisit and replicate past experiments accurately. Moreover, quality metrics such as classification accuracy, loss function fluctuations, and inference time are also tracked, enabling easy comparison between different models.
 
-The [EuroSAT dataset](https://github.com/phelber/EuroSAT) used in this tutorial consists of Sentinel-2 satellite images labeled with corresponding land use and cover categories. It provides a comprehensive representation of various land features. The dataset comprises 27,000 labeled and geo-referenced images, divided into 10 distinct classes. The multi-spectral version of the dataset includes all 13 Sentinel-2 bands, which retains the original value range of the Sentinel-2 bands, enabling access to a more comprehensive set of spectral information. This dataset has been published on the dedicated [STAC endpoint](https://radiantearth.github.io/stac-browser/#/external/ai-extensions-stac.terradue.com/collections/Euro_SAT). 
+The [EuroSAT dataset](https://github.com/phelber/EuroSAT) used in this tutorial consists of Sentinel-2 satellite images labeled with corresponding land use and cover categories. It provides a comprehensive representation of various land features. The dataset comprises 27,000 labeled and geo-referenced images, divided into 10 distinct classes. The multi-spectral version of the dataset includes all 13 Sentinel-2 bands, which retains the original value range of the Sentinel-2 bands, enabling access to a more comprehensive set of spectral information. This dataset has been published on the dedicated [STAC endpoint](https://radiantearth.github.io/stac-browser/#/external/ai-extensions-stac.terradue.com/collections/Euro_SAT).
 
 
 <p align="center"><img src="https://raw.githubusercontent.com/phelber/EuroSAT/master/eurosat_overview_small.jpg" alt="Picture" width="40%" height="10%" style="display: block; margin: 20px auto;"/></p>
@@ -29,7 +29,11 @@ This application supports training the Convolutional Neural Network (CNN) model 
 
 
 ## Outputs:
-- `mlruns`: Directory containing artifacts, metrics, and metadata for each training run, tracked and organized by MLflow.
+- `output/training/trained_model.keras`: selected checkpoint.
+- `model-run.json`: explicit MLflow run and model path for export.
+- MLflow metrics, confusion matrix and the raw Keras model artifact.
+
+Local CLI runs default to SQLite tracking. PDE uses its configured HTTP MLflow server.
 
 
 ## How the training process is structured internally
@@ -47,21 +51,15 @@ The pipeline for this task is illustrated in the diagram below:
 <p align="center"><img src="https://miro.medium.com/v2/resize:fit:1100/format:webp/0*LLe88lTuuvprFvAF.png" alt="Picture" width="40%" height="10%" style="display: block; margin: 20px auto;"/></p>
 
 ### Data Ingestion
-This component is designed to fetch data from a dedicated STAC endpoint containing a collection of STAC Items representing EuroSAT image chips. The user can query the collection using **DuckDB** on a **GeoParquet** file and split the resulting data into **training**, **validation**, and **test** datasets.
+This component is designed to fetch data from a dedicated STAC endpoint containing a collection of STAC Items representing EuroSAT image chips. The user can query the collection using **PyArrow** on a **GeoParquet** file and split the resulting data into **training**, **validation**, and **test** datasets.
 
 ### Based Model Architecture
-In this component, the user will design a CNN composed of **seven distinct layers**. The model beginnings with an **input layer**, which accepts images of shape `(13, 64, 64)` or any other cubic image shapes `(e.g. (3, 64, 64))`. This is followed by **four convolutional blocks**, each of which consists of the following sequence:
-
-* A **Conv2D** layer with ReLU activation
-* A **BatchNormalization** layer
-* A **2D MaxPooling** layer
-* A **Dropout** layer
-
-Although each block contains multiple operations, they are collectively treated as four convolutional layers in the context of the model architecture.
-
-After these convolutional blocks, the model includes a **dense (fully connected) layer**, typically used to transition from the convolutional feature extraction to classification. Finally, the **output layer** is a Dense layer with 10 units (corresponding to the number of output classes) and uses the **softmax** activation function to produce a probability distribution over the classes. 
-
-The user is required to select an appropriate loss function and optimizer from the available options. Once configured, the model is compiled and saved under `output/prepare_based_model`.
+The model accepts NHWC arrays of shape `(batch, 64, 64, 12)`. Training excludes
+cirrus from the thirteen-band EuroSAT chips and normalizes reflectance by 10000.
+It uses four convolution layers, two max-pooling layers, dropout, a flattened
+512-unit dense layer and a ten-class softmax output. Evaluation does not randomly
+augment test inputs. Training seeds Python, NumPy and TensorFlow through Keras.
+The configured batch size is passed to the model fit operation.
 
 ### Training
 This component is responsible for training the model for a specified number of epochs, as provided by the user through the application package inputs.
@@ -71,8 +69,8 @@ The user can evaluate the trained model, and **MLflow** will track the process f
 
 MLflow tracks the following:
 
-- **Evaluation metrics**, including `Accuracy`, `Precision`, `Recall`, and the loss value  
-- **Trained machine learning model** saved after each run  
+- **Evaluation metrics**, including `Accuracy`, `Precision`, `Recall`, and the loss value
+- **Trained machine learning model** saved after each run
 - **Additional artifacts**, such as the Loss curve plot during training, and the Confusion matrix.
 
 ## For developers
@@ -87,7 +85,18 @@ The folder structure is defined as:
         - to define helper functions.
     - <span style="color:gray">**pipeline**</span> /
         - to define the order of executing for each component.
-    
-    
 
 
+
+
+
+## Build and execute
+
+```bash
+podman build -f training/make-ml-model/Dockerfile -t localhost/ml-training:lab .
+podman run --rm localhost/ml-training:lab tile-based-training --help
+```
+
+The container installs the hash-locked runtime and runs as UID 1001. Supply a
+writable mounted output directory and a tracking URI reachable from the container.
+The application-step and container lessons demonstrate the full command.
