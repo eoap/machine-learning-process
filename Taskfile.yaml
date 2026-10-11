@@ -1,0 +1,41 @@
+version: '3'
+vars:
+  PYTHON: '{{default ".venv/bin/python" .PYTHON}}'
+env:
+  TF_NUM_INTRAOP_THREADS: '1'
+  TF_NUM_INTEROP_THREADS: '1'
+  CUDA_VISIBLE_DEVICES: '-1'
+tasks:
+  setup:
+    desc: Create the locked Python 3.12 development environment
+    cmds:
+      - uv venv --python 3.12 .venv
+      - uv pip sync --python .venv/bin/python --require-hashes requirements/development.txt
+      - uv pip install --python .venv/bin/python --no-deps -e training/make-ml-model -e inference/make-inference -e MLM
+  code:test:
+    desc: Run model handoff, inference and release regressions
+    cmds: ['{{.PYTHON}} -m pytest {{.CLI_ARGS}}']
+  code:check:
+    desc: Check application and helper lint and complexity
+    cmds: ['{{.PYTHON}} -m ruff check training/make-ml-model/src inference/make-inference/src MLM/src scripts tests']
+  code:lint:
+    desc: Check Python formatting
+    cmds: ['{{.PYTHON}} -m ruff format --check training/make-ml-model/src inference/make-inference/src MLM/src scripts tests']
+  code:typecheck:
+    desc: Type-check contract, fixture and export helpers
+    cmds: ['{{.PYTHON}} -m mypy scripts/check-contracts.py scripts/create-fixture.py training/make-ml-model/src/tile_based_training/export.py MLM/src/mlm/describe.py scripts/stage-fixture.py']
+  code:security:
+    desc: Check medium and high severity application security findings
+    cmds: ['{{.PYTHON}} -m bandit -r training/make-ml-model/src inference/make-inference/src MLM/src scripts -ll']
+  cwl:validate:
+    desc: Validate standalone CWL and generate contract documentation
+    cmds: ['{{.PYTHON}} scripts/check-contracts.py']
+  docs:build:
+    desc: Build documentation with strict validation
+    cmds: ['{{.PYTHON}} -m mkdocs build --strict']
+  fixture:
+    desc: Create the portable inference execution fixture
+    cmds: ['{{.PYTHON}} scripts/create-fixture.py']
+  labs:
+    desc: Execute nine lessons and retain notebook evidence
+    cmds: ['{{.PYTHON}} scripts/run-notebooks.py {{.CLI_ARGS}}']

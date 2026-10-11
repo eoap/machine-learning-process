@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "make-inference"
 dynamic = ["version"]
 description = "Inference module for the Tile-Based classification on Sentinel-2 data"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
 keywords = ["inference", "Sentinel-2", "CNN", "EuroSAT"]
 authors = [
@@ -15,10 +15,21 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = []  
+dependencies = [
+  "click>=8.1,<9",
+  "pystac[validation] @ git+https://github.com/Terradue/pystac.git@t2_extensions",
+  "numpy==1.26.4",
+  "rasterio>=1.4,<2",
+  "loguru>=0.7,<1",
+  "tqdm>=4.66,<5",
+  "rio-stac>=0.10,<1",
+  "onnxruntime==1.31.0",
+  "onnx==1.23.2",
+  "planetary-computer>=1,<2"
+]
 
 [project.urls]
 Documentation = "https://github.com/eoap/machine-learning-process/docs/inference-container.md"
@@ -43,42 +54,10 @@ include = [
 make-inference = "make_inference.main:main"
 
 [tool.hatch.envs.default]
-path = "/workspace/machine-learning-process/runs/envs/make_inference"
-dependencies = [
-    "click",
-    "pystac>=1.4.0",
-    "pystac_client",
-    "numpy",
-    "tf2onnx",
-    "georeader-spaceml",
-    "rasterio",
-    "loguru",
-    "tqdm",
-    "rio_stac",
-    "onnxmltools",
-    "onnxruntime",
-    "onnx",
-    "planetary_computer",
-]
+dependencies = ["ipykernel>=6,<7"]
 
 [tool.hatch.envs.prod]
-path = "/code/envs/make_inference"
-dependencies = [
-    "click",
-    "pystac>=1.4.0",
-    "pystac_client",
-    "numpy",
-    "tf2onnx",
-    "georeader-spaceml",
-    "rasterio",
-    "loguru",
-    "tqdm",
-    "rio_stac",
-    "onnxmltools",
-    "onnxruntime",
-    "onnx",
-    "planetary_computer",
-]
+dependencies = ["ipykernel>=6,<7"]
 
 [tool.hatch.envs.prod.scripts]
 inference = "python -m make_inference.main"
@@ -92,7 +71,7 @@ include = ["src/make_inference"]
 
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.10"]
+python = ["3.12"]
 
 # Coverage settings
 [tool.coverage.run]

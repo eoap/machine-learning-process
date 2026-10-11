@@ -1,0 +1,10 @@
+click>=8.1,<9
+loguru>=0.7,<1
+numpy==1.26.4
+onnx==1.23.2
+onnxruntime==1.31.0
+planetary-computer>=1,<2
+pystac[validation] @ ./vendor/pystac-1.14.3-py3-none-any.whl
+rasterio>=1.4,<2
+rio-stac>=0.10,<1
+tqdm>=4.66,<5

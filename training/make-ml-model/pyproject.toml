@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "tile-based-training"
 dynamic = ["version"]
 description = "Training module for the Tile-Based classification on Sentinel-2 data"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
 keywords = ["training", "Sentinel-2", "CNN", "EuroSAT"]
 authors = [
@@ -15,15 +15,43 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = []  
+dependencies = [
+  "click>=8.1,<9",
+  "pystac[validation] @ git+https://github.com/Terradue/pystac.git@t2_extensions",
+  "pystac-client>=0.8,<1",
+  "numpy==1.26.4",
+  "scikit-learn>=1.5,<2",
+  "pandas>=2.2,<3",
+  "matplotlib>=3.9,<4",
+  "joblib>=1.4,<2",
+  "PyYAML>=6,<7",
+  "python-box>=7,<8",
+  "tensorflow==2.21.0",
+  "mlflow==3.17.0",
+  "seaborn>=0.13,<1",
+  "rasterio>=1.4,<2",
+  "loguru>=0.7,<1",
+  "ensure>=1,<2",
+  "tqdm>=4.66,<5",
+  "duckdb>=1.1,<2",
+  "shapely>=2,<3",
+  "stac-geoparquet>=0.6,<1",
+  "tzdata",
+  "requests>=2.32,<3",
+  "tf2onnx==1.17.0",
+  "onnx==1.23.2",
+  "pyarrow>=23.0.1,<26",
+  "protobuf>=6.33.5,<8",
+  "onnxruntime==1.31.0"
+]
 
 [project.urls]
-Documentation = "https://github.com/ai-extensions/notebooks/tree/main/scenario-5/training#readme"
-Issues = "https://github.com/ai-extensions/notebooks/issues"
-Source = "https://github.com/ai-extensions/notebooks/tree/main/scenario-5/training/src/tile_based_training"
+Documentation = "https://eoap.github.io/machine-learning-process/training-container/"
+Issues = "https://github.com/eoap/machine-learning-process/issues"
+Source = "https://github.com/eoap/machine-learning-process/tree/main/training/make-ml-model"
 
 [tool.hatch.version]
 path = "src/tile_based_training/__about__.py"
@@ -48,74 +76,19 @@ include = [
 
 [project.scripts]
 tile-based-training = "tile_based_training.main:main"
+export-ml-model = "tile_based_training.export:main"
 
 [tool.hatch.envs.default]
-path = "/workspace/machine-learning-process/runs/envs/env_5"
-dependencies = [
-    "click",
-    "pystac>=1.4.0",
-    "pystac_client",
-    "numpy",
-    "scikit-learn",
-    "ipykernel",
-    "pandas",
-    "matplotlib",
-    "joblib",
-    "pyYAML",
-    "python-box",
-    "tensorflow",
-    "mlflow",
-    "seaborn",
-    "rasterio",
-    "loguru",
-    "ensure",
-    "pathlib",
-    "dataclasses",
-    "tqdm",
-    "pygeofilter",
-    "duckdb",
-    "shapely",
-    "stac-geoparquet",
-    "tzdata",
-    "pygeofilter_duckdb @ git+https://github.com/parham-membari-terradue/pygeofilter-duckdb"
-]
+dependencies = ["ipykernel>=6,<7"]
 
 [tool.hatch.envs.prod]
-path = "/code/envs/env_5"
-dependencies = [
-    "click",
-    "pystac>=1.4.0",
-    "pystac_client",
-    "numpy",
-    "scikit-learn",
-    "ipykernel",
-    "pandas",
-    "matplotlib",
-    "joblib",
-    "pyYAML",
-    "python-box",
-    "tensorflow",
-    "mlflow",
-    "seaborn",
-    "rasterio",
-    "loguru",
-    "ensure",
-    "pathlib",
-    "dataclasses",
-    "tqdm",
-    "pygeofilter",
-    "duckdb",
-    "shapely",
-    "stac-geoparquet",
-    "tzdata",
-    "pygeofilter_duckdb @ git+https://github.com/parham-membari-terradue/pygeofilter-duckdb"
-]
+dependencies = ["ipykernel>=6,<7"]
 
 [tool.hatch.envs.prod.scripts]
 train = "python -m tile_based_training.main"
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.10"]
+python = ["3.12"]
 
 # Coverage settings
 [tool.coverage.run]
@@ -131,20 +104,7 @@ tile_based_training = ["src/tile_based_training", "*/tile_based_training/src/til
 
 
 [tool.hatch.build.targets.wheel]
-data-files = [
-  { from = "config.yaml", to = "." },
-  { from = "params.yaml", to = "." },
-  { from = "src/tile_based_training/config/config.yaml", to = "config.yaml" },
-  { from = "src/tile_based_training/config/config.yaml", to = "params.yaml" },
-  "src/tile_based_training/config/params.yaml",
-  "src/tile_based_training/config/config.yaml",
-]
-
-artifacts = [
-  "*.yaml",
-  "*.yml",
-  "*.json",
-]
+packages = ["src/tile_based_training"]
 
 [tool.coverage.report]
 exclude_lines = [

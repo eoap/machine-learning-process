@@ -5,9 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "mlm"
 description = "Describes a trained machine learning model"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
-version="0.0.1"
+version="0.1.0"
 keywords = ["pystac","MLM extension","inference","training", "Sentinel-2", "CNN", "EuroSAT"]
 authors = [
     { name = "Parham Membari", email = "parham.membari@terradue.com" }
@@ -15,10 +15,21 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = []  
+dependencies = [
+  "pystac[validation] @ git+https://github.com/Terradue/pystac.git@t2_extensions",
+  "loguru>=0.7,<1",
+  "boto3>=1.35,<2",
+  "folium>=0.18,<1",
+  "pandas>=2.2,<3",
+  "geopandas>=1,<2",
+  "geojson>=3,<4",
+  "tqdm>=4.66,<5",
+  "requests>=2.32,<3",
+  "pyproj>=3.6,<4"
+]
 
 [project.urls]
 Documentation = "https://github.com/eoap/machine-learning-process/MLM#readme"
@@ -31,29 +42,14 @@ Source = "https://github.com/eoap/machine-learning-process/"
 allow-direct-references = true
 
 [tool.hatch.envs.default]
-path = "hatch/envs/mlm"
 
 [tool.hatch.envs.prod]
-path = "hatch/envs/mlm"
-dependencies = [
-    "pystac",
-    "pystac-client",
-    "black[jupyter]",
-    "loguru",
-    "boto3",
-    "folium",
-    "pandas",
-    "geopandas",
-    "botocore",
-    "geojson",
-    "tqdm",
-    "ipykernel",
-]
+dependencies = ["ipykernel>=6,<7"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/mlm"]
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.10"]
+python = ["3.12"]
 
 # Coverage settings
 [tool.coverage.run]
