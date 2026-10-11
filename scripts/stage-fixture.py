@@ -108,8 +108,11 @@ def publish(
                     reference.target = signed(target)
                 else:
                     reference.href = signed(target)
-        document.validate()
-        contents[path] = json.dumps(document.to_dict()).encode()
+        # Signed roots are not uploaded yet; preserve the already absolute links
+        # without resolving them through a remote catalog during serialization.
+        payload = document.to_dict(transform_hrefs=False)
+        pystac.validation.validate_dict(payload)
+        contents[path] = json.dumps(payload).encode()
     for path in sorted(files):
         client.put_object(
             Bucket=bucket,
