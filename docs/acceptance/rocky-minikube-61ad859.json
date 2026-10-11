@@ -1,0 +1,54 @@
+{
+  "candidate": null,
+  "source_commit": "61ad859afea1a229c1ccf9b0b288a13cdfee2aca",
+  "dirty_source": false,
+  "runner": "calrissian",
+  "architecture": "amd64",
+  "real_data": true,
+  "evidence_location": "/workspace/lab-results/ml-rocky-all",
+  "notebooks": [
+    {
+      "path": "practice-labs/Alternative1-Application_Steps/Step1A-training.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative1-Application_Steps/Step1B-ExtractModel.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative1-Application_Steps/Step2-inference.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative2-Containers/Step1A-training.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative2-Containers/Step1B-ExtractModel.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative2-Containers/Step2-inference.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative3-CWL-Workflows/Step1A-training.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative3-CWL-Workflows/Step1B-ExtractModel.ipynb",
+      "status": "passed"
+    },
+    {
+      "path": "practice-labs/Alternative3-CWL-Workflows/Step2-inference.ipynb",
+      "status": "passed"
+    }
+  ],
+  "scope": "Real EuroSAT notebook acceptance using local Rocky image builds; published candidate digest acceptance is still required.",
+  "data_provenance": {
+    "source": "EuroSAT Zenodo record 7711810",
+    "selection": "first ten IDs per class from repository GeoParquet",
+    "chips": 100,
+    "purpose": "execution and geospatial acceptance; no accuracy threshold"
+  }
+}
