@@ -1,0 +1,32 @@
+name: Notebook acceptance
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    paths: ['practice-labs/**', 'scripts/**', 'training/**', 'inference/**', 'MLM/**', 'requirements/**', 'vendor/**', 'Dockerfile', 'pyproject.toml', '.github/workflows/notebook-acceptance.yml']
+permissions:
+  contents: read
+jobs:
+  notebooks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: |
+          python -m pip install --require-hashes -r requirements/development.txt
+          python -m pip install --no-deps --no-build-isolation ./training/make-ml-model ./inference/make-inference ./MLM
+      - name: Execute all nine lessons
+        env:
+          EOAP_LOCAL_FIXTURE: '1'
+          EOAP_CONTAINER_ENGINE: docker
+          TF_NUM_INTRAOP_THREADS: '1'
+          TF_NUM_INTEROP_THREADS: '1'
+          CUDA_VISIBLE_DEVICES: '-1'
+        run: python scripts/run-notebooks.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: executed-notebooks
+          path: runs/notebook-acceptance

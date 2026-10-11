@@ -1,0 +1,49 @@
+name: Tests and contracts
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked environment and packages
+        run: |
+          python -m pip install --require-hashes -r requirements/development.txt
+          python -m pip install --no-deps --no-build-isolation ./training/make-ml-model ./inference/make-inference ./MLM
+          python -m pip check
+      - name: Tests and developer checks
+        env:
+          TF_NUM_INTRAOP_THREADS: '1'
+          TF_NUM_INTEROP_THREADS: '1'
+          CUDA_VISIBLE_DEVICES: '-1'
+        run: |
+          hatch run dev:check
+          hatch run dev:typecheck
+          hatch run dev:security
+          hatch run test:test
+          python scripts/check-contracts.py
+          python -m mkdocs build --strict
+      - name: Build wheels and command images
+        run: |
+          python -m build --wheel --no-isolation
+          docker build -t ml-process:test .
+          docker run --rm ml-process:test export-ml-model --help
+          python -m build --wheel --no-isolation training/make-ml-model
+          python -m build --wheel --no-isolation inference/make-inference
+          python -m build --wheel --no-isolation MLM
+          docker build -f training/make-ml-model/Dockerfile -t training:test .
+          docker run --rm training:test tile-based-training --help
+          docker build -f inference/make-inference/Dockerfile -t inference:test .
+          docker run --rm inference:test make-inference --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-contracts
+          path: docs/reference
