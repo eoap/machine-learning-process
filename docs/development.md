@@ -78,3 +78,14 @@ Its exact source revision, wheel hash and license are recorded in
 [`vendor/README.md`](https://github.com/eoap/machine-learning-process/blob/main/vendor/README.md).
 The wheel enables hash-checked installation without resolving an unhashable Git
 reference at runtime; it does not replace the fork with upstream PyPI PySTAC.
+
+## Processing images
+
+All three Dockerfiles use a digest-pinned Rocky Linux 10.1-minimal base in
+builder and runtime stages. The builder verifies the Hatch 1.14.0 AMD64 archive
+and builds a wheel. The runtime installs hash-locked dependencies and that wheel
+in `/app/venv` as `neo` (UID/GID 2000), checks dependencies and installed CLI
+commands, then removes pip. Auxiliary model/configuration resources are packaged
+in the wheel. Build from the repository root. AMD64 is the supported build
+platform for this candidate; other platforms require verified Hatch artifacts
+and separate scientific acceptance. Output mounts must be writable by UID 2000.

@@ -3,8 +3,9 @@ import random
 
 import numpy as np
 import tensorflow as tf
-from tile_based_training.utils.common import augmentation, rasterio_read
 from tqdm import tqdm
+
+from tile_based_training.utils.common import augmentation, rasterio_read
 
 tf.config.run_functions_eagerly(True)
 

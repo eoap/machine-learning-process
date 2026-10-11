@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from box import ConfigBox
+
 from tile_based_training.constants import CONFIG_FILE_PATH, PARAMS_FILE_PATH, config_dict
 from tile_based_training.entity.config_entity import (
     DataIngestionConfig,

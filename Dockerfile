@@ -1,25 +1,38 @@
-# Build all three command packages as one installable course distribution.
-FROM python:3.12.14-slim AS builder
+FROM rockylinux/rockylinux:10.1-minimal@sha256:cfa2812ec7151c2be393cfe46e50cf59426373d12f03f4ffbdd56becb8195a65 AS builder
+RUN microdnf -y update && \
+    microdnf -y install curl tar git python3 python3-pip python3-setuptools gcc gcc-c++ make sqlite-devel zlib-devel glibc-devel libstdc++-devel && \
+    microdnf clean all
+ARG TARGETARCH
+RUN test "$TARGETARCH" = amd64 && \
+    curl -fsSL https://github.com/pypa/hatch/releases/download/hatch-v1.14.0/hatch-x86_64-unknown-linux-gnu.tar.gz -o /tmp/hatch.tar.gz && \
+    echo "33af9b6f72cf11db6bc96070901cb9d32adbe316534bbf41d345cdd0d84b3459  /tmp/hatch.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/hatch.tar.gz -C /tmp && \
+    install -m 0755 /tmp/hatch /usr/local/bin/hatch && \
+    rm -rf /tmp/hatch*
 WORKDIR /src
-COPY requirements/build.txt requirements/build.txt
-COPY vendor vendor
-RUN pip install --no-cache-dir --require-hashes -r requirements/build.txt
-COPY . .
-RUN python -m build --wheel --no-isolation
+COPY . /src
+RUN cd . && hatch build -t wheel
 
-FROM python:3.12.14-slim AS runtime
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends libexpat1 && rm -rf /var/lib/apt/lists/*
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
-    TF_NUM_INTRAOP_THREADS=1 TF_NUM_INTEROP_THREADS=1
-WORKDIR /src
-COPY requirements/runtime.txt requirements/runtime.txt
-COPY vendor vendor
-RUN python -m venv "$VIRTUAL_ENV" && pip install --no-cache-dir --require-hashes -r requirements/runtime.txt
-COPY --from=builder /src/dist/*.whl /tmp/wheels/
-RUN pip install --no-cache-dir --no-deps /tmp/wheels/*.whl && pip check && rm -rf /src /tmp/wheels
-RUN groupadd -g 1001 eoap && useradd -u 1001 -g 1001 -m eoap && mkdir /work && chown eoap:eoap /work
-USER 1001:1001
-WORKDIR /work
+FROM rockylinux/rockylinux:10.1-minimal@sha256:cfa2812ec7151c2be393cfe46e50cf59426373d12f03f4ffbdd56becb8195a65 AS runtime
+RUN microdnf -y update && \
+    microdnf -y install python3 python3-pip git jq libstdc++ sqlite-libs zlib libgomp expat && \
+    microdnf clean all
+ENV HOME=/home/neo
+RUN /usr/sbin/groupadd -g 2000 neo && \
+    /usr/sbin/useradd -u 2000 -g 2000 -m -d ${HOME} -s /sbin/nologin neo && \
+    mkdir -p /app /work && chown -R 2000:2000 /app /work ${HOME}
+USER neo
+WORKDIR /app
+ENV VIRTUAL_ENV=/app/venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}:/usr/bin" \
+    TF_NUM_INTRAOP_THREADS=1 TF_NUM_INTEROP_THREADS=1 CUDA_VISIBLE_DEVICES=-1
+RUN python3 -c 'import sys; assert sys.version_info[:2] == (3, 12)' && python3 -m venv /app/venv
+COPY --chown=2000:2000 vendor /app/vendor
+COPY --chown=2000:2000 requirements/runtime.txt /app/requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r /app/requirements.txt
+COPY --from=builder --chown=2000:2000 /src/./dist/*.whl /app/dist/
+RUN pip install --no-cache-dir --no-deps /app/dist/*.whl && \
+    pip check && python -m pip uninstall --yes pip && tile-based-training --help && export-ml-model --help && make-inference --help && \
+    rm -rf /app/vendor /app/requirements.txt /app/dist
 ENTRYPOINT []
 CMD ["tile-based-training", "--help"]

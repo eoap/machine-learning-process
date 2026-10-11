@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
@@ -30,6 +30,7 @@ dependencies = [
   "requests>=2.32,<3",
   "pyproj>=3.6,<4"
 ]
+readme = "README.md"
 
 [project.urls]
 Documentation = "https://github.com/eoap/machine-learning-process/MLM#readme"
@@ -45,13 +46,34 @@ allow-direct-references = true
 
 [tool.hatch.envs.prod]
 dependencies = ["ipykernel>=6,<7"]
+
+[tool.hatch.envs.dev]
+skip-install = true
+installer = "uv"
+post-install-commands = ["cd .. && uv pip install --require-hashes -r requirements/development.txt", "cd .. && uv pip install --no-deps --no-build-isolation -e training/make-ml-model -e inference/make-inference -e MLM"]
+
+[tool.hatch.envs.dev.env-vars]
+TF_NUM_INTRAOP_THREADS = "1"
+TF_NUM_INTEROP_THREADS = "1"
+CUDA_VISIBLE_DEVICES = "-1"
+
+[tool.hatch.envs.dev.scripts]
+check = ["format-check", "lint-check", "typecheck", "security"]
+format-check = "cd .. && ruff format --check training/make-ml-model/src inference/make-inference/src MLM/src scripts tests"
+lint-check = "cd .. && ruff check training/make-ml-model/src inference/make-inference/src MLM/src scripts tests"
+typecheck = "cd .. && mypy scripts/check-contracts.py scripts/create-fixture.py training/make-ml-model/src/tile_based_training/export.py MLM/src/mlm/describe.py scripts/stage-fixture.py"
+security = "cd .. && bandit -r training/make-ml-model/src inference/make-inference/src MLM/src scripts -ll"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/mlm"]
 
-[[tool.hatch.envs.test.matrix]]
-python = ["3.12"]
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/README.md", "/pyproject.toml"]
+[tool.hatch.envs.test]
+template = "dev"
 
-# Coverage settings
+[tool.hatch.envs.test.scripts]
+test = "cd .. && pytest -q {args}"
 [tool.coverage.run]
 branch = true
 parallel = true
@@ -64,3 +86,20 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "SIM", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["../tests"]
+addopts = "--import-mode=importlib"

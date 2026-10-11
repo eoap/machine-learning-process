@@ -11,9 +11,10 @@ import requests
 
 # import botocore
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+
 from tile_based_training import logger
 from tile_based_training.entity.config_entity import DataIngestionConfig
-from tqdm import tqdm
 
 
 # UPDATING src's component
