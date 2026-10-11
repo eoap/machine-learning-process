@@ -1,9 +1,8 @@
-FROM rockylinux/rockylinux:10.1-minimal@sha256:cfa2812ec7151c2be393cfe46e50cf59426373d12f03f4ffbdd56becb8195a65 AS builder
+FROM docker.io/rockylinux/rockylinux:10.1-minimal@sha256:cfa2812ec7151c2be393cfe46e50cf59426373d12f03f4ffbdd56becb8195a65 AS builder
 RUN microdnf -y update && \
     microdnf -y install curl tar git python3 python3-pip python3-setuptools gcc gcc-c++ make sqlite-devel zlib-devel glibc-devel libstdc++-devel && \
     microdnf clean all
-ARG TARGETARCH
-RUN test "$TARGETARCH" = amd64 && \
+RUN test "$(uname -m)" = x86_64 && \
     curl -fsSL https://github.com/pypa/hatch/releases/download/hatch-v1.14.0/hatch-x86_64-unknown-linux-gnu.tar.gz -o /tmp/hatch.tar.gz && \
     echo "33af9b6f72cf11db6bc96070901cb9d32adbe316534bbf41d345cdd0d84b3459  /tmp/hatch.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/hatch.tar.gz -C /tmp && \
@@ -13,7 +12,7 @@ WORKDIR /src
 COPY . /src
 RUN cd inference/make-inference && hatch build -t wheel
 
-FROM rockylinux/rockylinux:10.1-minimal@sha256:cfa2812ec7151c2be393cfe46e50cf59426373d12f03f4ffbdd56becb8195a65 AS runtime
+FROM docker.io/rockylinux/rockylinux:10.1-minimal@sha256:cfa2812ec7151c2be393cfe46e50cf59426373d12f03f4ffbdd56becb8195a65 AS runtime
 RUN microdnf -y update && \
     microdnf -y install python3 python3-pip git jq libstdc++ sqlite-libs zlib libgomp expat && \
     microdnf clean all
