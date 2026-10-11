@@ -1,20 +1,6 @@
-# Describes a trained Machine Learning model 
+# Describe a trained model
 
-This tutorial describes a trained Machine Learning model using [MLM](https://github.com/stac-extensions/mlm) STAC extension. The STAC MLM Extension provides a standard set of fields to describe machine learning models trained on overhead imagery and enable running model inference.
-
-The main objectives of the extension are:
-
-- to enable building model collections that can be searched alongside associated STAC datasets;
-- to record all necessary bands, parameters, modeling artifact locations, and high-level processing steps to deploy an inference service.
-
-For additional information please follow this [Describe-MLmodel](./Describe-MLmodel.md) notebook.
-
-## For developers:
-To run the notebook successfully, you must install the dependencies with `hatch`:
-
-```
-hatch shell prod
-hatch -e prod run python -m ipykernel install --user --name=mlm --display-name "mlm"
-```
-
-
+Use STAC 1.1.0 with the MLM 1.6.0 extension to record the exported model's input/output contract,
+artifact and source-run provenance. Follow [the model-description lesson](Describe-MLmodel.md)
+and MLM/Describe-MLmodel.ipynb using the locked ml_env environment installed by
+`task setup`. Export creates the model contract; description validates its checksum and the declared STAC schemas.

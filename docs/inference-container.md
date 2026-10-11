@@ -1,19 +1,19 @@
 # Inference container:
 
-This module enables users to create an inference pipeline that takes a Sentinel-2 STAC Item from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections), and generates a binary mask TIFF image using a pre-trained CNN model. For details on how the model was trained, refer to the [training container documentation](./training-container.md).
+This module enables users to create an inference pipeline that takes a Sentinel-2 STAC Item from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections), and generates a land-cover classification TIFF image using a pre-trained CNN model. For details on how the model was trained, refer to the [training container documentation](./training-container.md).
 
 
 
 ## **`Make Inference` Module:**
 
 **Inputs**:
- 
-- `input_reference`: A list of Sentinel-2 product references from [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). Note: the inference application provides accurate results only when the Sentinel-2 product has low or no cloud cover. High cloud coverage may significantly reduce prediction accuracy.
+
+- `input_reference`: A Sentinel-2 STAC item or catalog reference from [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections). Assess classification quality using representative labelled observations and their processing level.
 
 **Outputs**:
 
-- `{STAC_ITEM_ID}_classified.tif`: A binary `.tif` image in `COG` format containing the full-resolution land cover classification predicted by the model, with each pixel assigned to a land cover class as defined in the table below. 
-- `overview_{STAC_ITEM_ID}_classified.tif`: A binary `.tif` image in `COG` format containing lower-resolution overview of the classification result, generated to support fast visualisation and efficient browsing across zoom levels. 
+- `{STAC_ITEM_ID}_classified.tif`: A classified `.tif` image in `COG` format containing the full-resolution land cover classification predicted by the model, with each pixel assigned to a land cover class as defined in the table below.
+- `overview_{STAC_ITEM_ID}_classified.tif`: A classified `.tif` image in `COG` format containing lower-resolution overview of the classification result, generated to support fast visualisation and efficient browsing across zoom levels.
 - `STAC objects`: STAC objects related to the provided masks, including STAC Catalog and STAC Item.
 
 *Land Cover Classes*
@@ -34,7 +34,7 @@ This module enables users to create an inference pipeline that takes a Sentinel-
 
 ## How the Application Works
 
-The application begins by reading the input Sentinel-2 STAC Item(s) from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections) and then extracting the 12 common Sentinel-2 spectral bands (see table below), ordered to match those expected by the trained ML model. 
+The application begins by reading the input Sentinel-2 STAC Item(s) from the [Planetary Computer](https://planetarycomputer.microsoft.com/api/stac/v1/collections) and then extracting the 12 common Sentinel-2 spectral bands (see table below), ordered to match those expected by the trained ML model.
 
 *Sentinel-2 Spectral Bands*
 | Index | Asset Key  | Asset Common Name |
@@ -60,3 +60,15 @@ At the end of the process, the application generates:
 - The LC classification prediction map (COG mask)
 - A visual overview image
 - An updated STAC Catalog and Item containing metadata and references to the output files.
+
+## Build and select a model
+
+```bash
+podman build -f inference/make-inference/Dockerfile -t localhost/ml-inference:lab .
+podman run --rm localhost/ml-inference:lab make-inference --help
+```
+
+Use `--model /mounted/model.onnx` to select an exported model. Omit it to use the
+bundled model. All bands must share a grid after resampling; missing required
+bands fail with a clear error. Partial tiles are padded and cropped, nodata is
+class 10, and only invocation-owned intermediates are cleaned up.

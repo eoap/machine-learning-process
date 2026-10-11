@@ -18,3 +18,13 @@ The documentation is organized into sections, each providing specific informatio
   - [Training a Machine Learning Model](https://eoap.github.io/machine-learning-process/training-container/)
   - [Running Inference on Real-World Data](https://eoap.github.io/machine-learning-process/inference-container/)
 - **[Technical Insights and Learnings](https://eoap.github.io/machine-learning-process/insights/):** Shares the decisions and insights gained during development.
+
+## Development and acceptance
+
+Run `task setup`, `task code:test`, `task cwl:validate`, and `task docs:build`.
+See [developer tooling](docs/development.md) and [release acceptance](docs/release.md).
+Verified development results are recorded in [acceptance evidence](docs/acceptance.md).
+The nine lessons retain their outputs and execute training, model export and
+inference in application, container and CWL scenarios. Synthetic fixtures are
+execution checks; real-data/cluster acceptance and published artifacts are
+separate release gates. Version 0.1.0 is unreleased preparation.
