@@ -1,6 +1,6 @@
-from tile_based_training.config.configuration import ConfigurationManager
-from tile_based_training.components.data_ingestion import DataIngestion
 from tile_based_training import logger
+from tile_based_training.components.data_ingestion import DataIngestion
+from tile_based_training.config.configuration import ConfigurationManager
 
 STAGE_NAME = "Data Ingestion stage"
 

@@ -1,37 +1,30 @@
-import os
-import sys
-from box.exceptions import BoxValueError
-import yaml
-from tile_based_training import logger
+import base64
 import json
-import joblib
-from ensure import ensure_annotations
-from box import ConfigBox
+import logging
+import os
+import random
+import re
+import time
 from pathlib import Path
 from typing import Any
-import base64
-import requests
-import random
-import duckdb
+
 # import boto3  # noqa: F401
-from urllib.parse import urlparse
-from loguru import logger
-import requests
-from pystac.stac_io import DefaultStacIO
-import json
-import os
-import re
-import rasterio
-from rasterio.env import Env
+import duckdb
+import joblib
+
 # from fs_s3fs import S3FS
 import numpy as np
-import random
+import rasterio
+import requests
 import tensorflow as tf
-import logging
-from pygeofilter.parsers.cql2_json import parse as json_parse
-from pygeofilter_duckdb import to_sql_where
-from pygeofilter.util import IdempotentDict
+import yaml
+from box import ConfigBox
+from box.exceptions import BoxValueError
+from ensure import ensure_annotations
+from rasterio.env import Env
+from rasterio.errors import RasterioIOError
 
+logger = logging.getLogger(__name__)
 logging.getLogger("httpchecksum").setLevel(logging.INFO)
 
 
@@ -47,6 +40,8 @@ def configure_gpu():
         except RuntimeError as e:
             logger.info(f"❌ Error enabling GPU memory growth: {e}")
             return "/CPU:0"
+
+    return "/CPU:0"
 
 
 @ensure_annotations
@@ -68,8 +63,8 @@ def read_yaml(path_to_yaml: Path) -> ConfigBox:
             content = yaml.safe_load(yaml_file)
             logger.info(f"yaml file: {path_to_yaml} loaded successfully")
             return ConfigBox(content)
-    except BoxValueError:
-        raise ValueError("yaml file is empty")
+    except BoxValueError as error:
+        raise ValueError("yaml file is empty") from error
     except Exception as e:
         raise e
 
@@ -151,7 +146,7 @@ def load_txt(path: Path) -> list:
     Returns:
         List: data as list of items' id
     """
-    with open(path, "r") as file:
+    with open(path) as file:
         data = [line.strip() for line in file]
         random.shuffle(data)
     return data
@@ -227,25 +222,13 @@ def encodeImageIntoBase64(croppedImagePath):
         return base64.b64encode(f.read())
 
 
-import os
-import requests
-import logging
-
-logger = logging.getLogger(__name__)
-
-import os
-import logging
-import requests
-
-logger = logging.getLogger(__name__)
-
 TOKEN_CACHE = {"token": None, "expires_at": 0}
 
 
 def get_token(url, **kwargs):
     data = {**kwargs}
 
-    response = requests.post(url, data=data)
+    response = requests.post(url, data=data, timeout=30)
 
     if response.status_code == 200:
         json_data = response.json()
@@ -301,7 +284,7 @@ class UserSettings:
     @staticmethod
     def read_json_file(file_path):
         """read a JSON file and return the contents as a dictionary"""
-        with open(file_path, "r", encoding="utf-8") as stream:
+        with open(file_path, encoding="utf-8") as stream:
             return json.load(stream)
 
     @staticmethod
@@ -398,32 +381,27 @@ class UserSettings:
 #         logger.error("S3 bucket's configuration is failed")
 #         sys.exit(1)
 
-import time
-import rasterio
-from rasterio.env import Env
-from rasterio.errors import RasterioIOError
-
 
 # def rasterio_read(image_path: str):
-#     full_path = f"/vsizip/vsicurl/{image_path}"
-    
+#     full_path = f"/vsizip/vsicurl/{image_path}" if ".zip/" in image_path and image_path.startswith("http") else image_path
+
 #     with Env(GDAL_DISABLE_READDIR_ON_OPEN='TRUE', VSI_CACHE='TRUE'):
 #         with rasterio.open(full_path) as src:
 #             total_bands = src.count
-#             band_index_to_exclude = [11]
+#             band_index_to_exclude = [11] if total_bands == 13 else []
 #             band_indices = [b for b in range(1, total_bands + 1) if b not in band_index_to_exclude]
 
 #             # Read the specified bands
 #             data = src.read(band_indices)
 #             data = data.astype("float32")
-    
+
 #     return data
 
 
-def rasterio_read(image_path: str, max_retries: int = 20, backoff_base: int = 5):
+def rasterio_read(image_path: str, max_retries: int = 3, backoff_base: int = 5):
     """
     Attempts to read a GeoTIFF file using rasterio with retries and exponential backoff.
-    
+
     Parameters:
         image_path (str): Path to the file (excluding the /vsizip/vsicurl/ prefix).
         max_retries (int): Number of attempts before giving up.
@@ -432,21 +410,35 @@ def rasterio_read(image_path: str, max_retries: int = 20, backoff_base: int = 5)
     Returns:
         data (np.ndarray): The read image data as a NumPy array (float32).
     """
-    #print(os.getcwd())
-    full_path = f"/vsizip/vsicurl/{image_path}"
+    # print(os.getcwd())
+    full_path = (
+        f"/vsizip/vsicurl/{image_path}"
+        if ".zip/" in image_path and image_path.startswith("http")
+        else image_path
+    )
     attempt = 0
 
     while attempt < max_retries:
         try:
-            with Env(VSI_CACHE='TRUE', GDAL_CACHEMAX=2048):
-                with rasterio.open(full_path) as src:
-                    total_bands = src.count
-                    band_index_to_exclude = [11]
-                    band_indices = [b for b in range(1, total_bands + 1) if b not in band_index_to_exclude]
-                    data = src.read(band_indices).astype("float32")
-                    return data
-        except RasterioIOError as e:
-            wait_time = backoff_base * (2 ** attempt) + 5
+            with (
+                Env(
+                    VSI_CACHE="TRUE",
+                    GDAL_CACHEMAX=67108864,
+                    CPL_VSIL_CURL_USE_HEAD="NO",
+                    GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+                    GDAL_HTTP_TIMEOUT="30",
+                ),
+                rasterio.open(full_path) as src,
+            ):
+                total_bands = src.count
+                band_index_to_exclude = [11] if total_bands == 13 else []
+                band_indices = [
+                    b for b in range(1, total_bands + 1) if b not in band_index_to_exclude
+                ]
+                data = src.read(band_indices).astype("float32")
+                return data
+        except RasterioIOError:
+            wait_time = backoff_base * (2**attempt) + 5
             time.sleep(wait_time)
             attempt += 1
 
@@ -454,17 +446,18 @@ def rasterio_read(image_path: str, max_retries: int = 20, backoff_base: int = 5)
 
 
 # def rasterio_read(image_path: str):
-    
+
 #     read_url = f'/vsizip/vsicurl/{image_path}'
 
 #     with rasterio.open(read_url) as src:
 #         total_bands = src.count
-#         band_index_to_exclude = [11] # Exclude band 11(cirrus band)
+#         band_index_to_exclude = [11] if total_bands == 13 else [] # Exclude band 11(cirrus band)
 #         band_indices = [b for b in range(1, total_bands + 1) if b not in band_index_to_exclude]
 #         data = src.read(band_indices)
 #         data = data.astype("float32")
 
 #     return data
+
 
 def augmentation(data):
     # Random rotation (90, 180, 270 degrees)
@@ -478,9 +471,7 @@ def augmentation(data):
         data = np.flip(data, axis=2)  # horizontal flip
     data = data / 10000.0  # Normalize
     return data
-    
-    
-    
+
     #### For GDAL
     # settings = S3Settings(
     #     region_name=region_name,
@@ -499,7 +490,7 @@ def augmentation(data):
 
 def duckdb_config():
     duckdb.install_extension("spatial")
-    duckdb.load_extension("spatial") 
+    duckdb.load_extension("spatial")
     # s3_aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
     # s3_aws_access_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
     # s3_aws_region = os.environ.get("AWS_REGION")
@@ -554,33 +545,20 @@ def duckdb_config():
 
 
 def sql_generator(class_name, geoparquet_asset_path, samples_per_class=100):
-    # Use the geometry variable inside the CQL2 filter
-    geometry = {
-        "type": "Polygon",
-        "coordinates": [[[-180, 90], [-180, -90], [180, -90], [180, 90], [-180, 90]]],
-    }
-    cql2_filter = {
-        "op": "and",
-        "args": [
-            {
-                "op": "like",
-                "args": [{"property": "id"}, f"{class_name}%"],
-            },
-            {
-                "op": "s_intersects",
-                "args": [
-                    {"property": "geometry"},
-                    geometry,
-                ],
-            },
-        ],
-    }
-
-    # Convert CQL2 filter to SQL WHERE clause
-    sql_where = to_sql_where(json_parse(cql2_filter), IdempotentDict())
-
-    # Define the SQL query with dynamically inserted sql_where
-
-    sql_query = f"SELECT * EXCLUDE(geometry), ST_AsWKB(geometry) as geometry FROM read_parquet('{geoparquet_asset_path}') WHERE {sql_where} LIMIT {samples_per_class}"
-    
-    return sql_query
+    if class_name not in (
+        "AnnualCrop",
+        "Forest",
+        "HerbaceousVegetation",
+        "Highway",
+        "Industrial",
+        "Pasture",
+        "PermanentCrop",
+        "Residential",
+        "River",
+        "SeaLake",
+    ):
+        raise ValueError("Unknown training class")
+    if samples_per_class < 1:
+        raise ValueError("samples_per_class must be positive")
+    query = "SELECT * EXCLUDE(geometry), ST_AsWKB(geometry) as geometry FROM read_parquet(?) WHERE id LIKE ? ORDER BY id LIMIT ?"
+    return query, [geoparquet_asset_path, class_name + "%", int(samples_per_class)]

@@ -5,6 +5,11 @@
   "description": "A collection for EuroSAT data",
   "links": [
     {
+      "rel": "self",
+      "href": "/data/work/github-com/eoap/machine-learning-process/training/app-package/EUROSAT-Training-Dataset/EUROSAT-Training-Dataset/collection.json",
+      "type": "application/json"
+    },
+    {
       "rel": "root",
       "href": "https://raw.githubusercontent.com/eoap/machine-learning-process/main/training/app-package/EUROSAT-Training-Dataset/catalog.json",
       "type": "application/json",
@@ -18,7 +23,7 @@
     }
   ],
   "stac_extensions": [
-    "https://schemas.stacspec.org/v1.0.0/collection-spec/json-schema/collection.json"
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json"
   ],
   "title": "EUROSAT-Training-Dataset",
   "extent": {

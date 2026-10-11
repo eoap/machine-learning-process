@@ -1,7 +1,6 @@
-from tile_based_training.config.configuration import ConfigurationManager
-from tile_based_training.components.model_evaluation import Evaluation
 from tile_based_training import logger
-
+from tile_based_training.components.model_evaluation import Evaluation
+from tile_based_training.config.configuration import ConfigurationManager
 
 STAGE_NAME = "Evaluating Model"
 
@@ -21,8 +20,8 @@ class ModelEvaluationPipeline:
 
 if __name__ == "__main__":
     try:
-        logger.info(f"***********************")
-        logger.info(f"***********************")
+        logger.info("***********************")
+        logger.info("***********************")
         logger.info(f">>>>>> stage {STAGE_NAME} started <<<<<<")
         obj = ModelEvaluationPipeline()
         obj.main()

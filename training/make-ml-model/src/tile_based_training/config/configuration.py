@@ -1,17 +1,22 @@
-from tile_based_training.constants import *
-from tile_based_training.utils.common import *
+from pathlib import Path
+
+from box import ConfigBox
+from tile_based_training.constants import CONFIG_FILE_PATH, PARAMS_FILE_PATH, config_dict
 from tile_based_training.entity.config_entity import (
     DataIngestionConfig,
+    EvaluationConfig,
     PrepareBaseModelConfig,
     TrainingConfig,
-    EvaluationConfig,
 )
+from tile_based_training.utils.common import create_directories, load_json, read_yaml
 
 
 # CONFIGURATION MANAGER
 class ConfigurationManager:
     def __init__(self, config_filepath=CONFIG_FILE_PATH, params_filepath=PARAMS_FILE_PATH):
-        self.config = read_yaml(config_filepath)
+        self.config = (
+            read_yaml(config_filepath) if Path(config_filepath).exists() else ConfigBox(config_dict)
+        )
         self.params = read_yaml(params_filepath)
 
         create_directories([self.config.output_root])
@@ -19,7 +24,7 @@ class ConfigurationManager:
     def get_data_ingestion_config(self) -> DataIngestionConfig:
         config = self.config.data_ingestion
         create_directories([config.root_dir])
-        
+
         data_ingestion_config = DataIngestionConfig(
             root_dir=config.root_dir,
             stac_reference=self.params.stac_reference,
@@ -73,7 +78,9 @@ class ConfigurationManager:
         return training_config
 
     def get_evaluation_config(self) -> EvaluationConfig:
-        test_data = load_json(Path(self.config.evaluation.all_data_urls + "/splitted_data.json"))["test"]
+        test_data = load_json(Path(self.config.evaluation.all_data_urls + "/splitted_data.json"))[
+            "test"
+        ]
 
         eval_config = EvaluationConfig(
             path_of_model=self.config.evaluation.trained_model_path,

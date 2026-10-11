@@ -1,26 +1,29 @@
-from loguru import logger
+import math
 import os
+import warnings
+from pathlib import Path
 from shutil import move
-import rasterio
+
+import numpy as np
 import pystac
-from rio_stac.stac import create_stac_item
+import rasterio
+from loguru import logger
+from planetary_computer import sign
+from pystac.extensions.raster import RasterBand, RasterExtension
 from rasterio.warp import Resampling
 from rasterio.windows import Window
-from planetary_computer import sign
-from typing import Dict, List
-import pystac
-import warnings
-import math
-import numpy as np
+from rio_stac.stac import create_stac_item
 
 warnings.filterwarnings("ignore")
 
 
-def _get_stats(arr: np.ma.MaskedArray) -> Dict:
+def _get_stats(arr: np.ma.MaskedArray) -> dict:
     """Calculate array statistics."""
+    if arr.count() == 0:
+        return {"statistics": {"valid_percent": 0.0}}
     # Avoid non classified nan/inf values
     np.ma.fix_invalid(arr, copy=False)
-    sample, edges = np.histogram(arr[~arr.mask], bins=np.arange(256))
+    sample, edges = np.histogram(arr.compressed(), bins=np.arange(257))
     return {
         "statistics": {
             "mean": arr.mean().item(),
@@ -30,7 +33,7 @@ def _get_stats(arr: np.ma.MaskedArray) -> Dict:
             "valid_percent": np.count_nonzero(~arr.mask) / float(arr.data.size) * 100,
         },
         "histogram": {
-            "count": len(edges),
+            "count": len(sample),
             "min": float(edges.min()),
             "max": float(edges.max()),
             "buckets": sample.tolist(),
@@ -38,26 +41,36 @@ def _get_stats(arr: np.ma.MaskedArray) -> Dict:
     }
 
 
+def _raster_nodata(nodata: float) -> float | str:
+    """Represent non-finite nodata values using STAC Raster's string literals."""
+    if np.isnan(nodata):
+        return "nan"
+    if np.isposinf(nodata):
+        return "inf"
+    if np.isneginf(nodata):
+        return "-inf"
+    return nodata
+
+
 def get_raster_info(
-    src_dst,
+    src_dst: rasterio.io.DatasetReader,
     max_size: int = 1024,
-):
+) -> list[dict[str, object]]:
     """Get raster metadata.
     see: https://github.com/stac-extensions/raster#raster-band-object
     """
     height = src_dst.height
     width = src_dst.width
-    if max_size:
-        if max(width, height) > max_size:
-            ratio = height / width
-            if ratio > 1:
-                height = max_size
-                width = math.ceil(height / ratio)
-            else:
-                width = max_size
-                height = math.ceil(width * ratio)
+    if max_size and max(width, height) > max_size:
+        ratio = height / width
+        if ratio > 1:
+            height = max_size
+            width = math.ceil(height / ratio)
+        else:
+            width = max_size
+            height = math.ceil(width * ratio)
 
-    meta: List[Dict] = []
+    meta: list[dict] = []
 
     area_or_point = src_dst.tags().get("AREA_OR_POINT", "").lower()
 
@@ -73,14 +86,7 @@ def get_raster_info(
 
         # If the Nodata is not set we don't forward it.
         if src_dst.nodata is not None:
-            if np.isnan(src_dst.nodata):
-                value["nodata"] = "nan"
-            elif np.isposinf(src_dst.nodata):
-                value["nodata"] = "inf"
-            elif np.isneginf(src_dst.nodata):
-                value["nodata"] = "-inf"
-            else:
-                value["nodata"] = src_dst.nodata
+            value["nodata"] = _raster_nodata(src_dst.nodata)
 
         if src_dst.units[band - 1] is not None:
             value["unit"] = src_dst.units[band - 1]
@@ -91,63 +97,82 @@ def get_raster_info(
     return meta
 
 
-def generate_asset_overview(asset_in_key, target_dir):
-    asset_out_key = f"{asset_in_key}"
-    raster_info = {
-        "raster:bands": get_raster_info(
-            rasterio.open(target_dir),
-            max_size=1024,
-        )
-    }
+def generate_asset_overview(asset_in_key: str, target_dir: str | Path) -> tuple[str, pystac.Asset]:
+    """Create an overview asset reference for a classified Item.
 
-    return "overview-" + asset_in_key, pystac.asset.Asset(
-        href=f"overview-{asset_out_key}_classified.tif",
-        media_type=pystac.media_type.MediaType.COG,
-        title=f"{asset_out_key} overview",
+    Args:
+        asset_in_key: Source Item identifier.
+        target_dir: Classification raster location.
+
+    Returns:
+        Asset key and its local overview reference.
+    """
+    return "overview-" + asset_in_key, pystac.Asset(
+        href=f"overview-{asset_in_key}_classified.tif",
+        media_type=pystac.MediaType.COG,
+        title=f"{asset_in_key} overview",
         roles=["visual", "overview"],
-        extra_fields=raster_info,
     )
 
 
-def generate_asset(asset_in_key, target_dir):
-    asset_out_key = f"{asset_in_key}"
-    raster_info = {
-        "raster:bands": get_raster_info(
-            rasterio.open(target_dir),
-            max_size=1024,
-        )
-    }
+def generate_asset(asset_in_key: str, target_dir: str | Path) -> tuple[str, pystac.Asset]:
+    """Create a classification asset reference.
 
-    return asset_in_key, pystac.asset.Asset(
-        href=f"{asset_out_key}_classified.tif",
-        media_type=pystac.media_type.MediaType.COG,
-        title=f"{asset_out_key}",
+    Args:
+        asset_in_key: Source Item identifier.
+        target_dir: Classification raster location.
+
+    Returns:
+        Asset key and its local classification reference.
+    """
+    return asset_in_key, pystac.Asset(
+        href=f"{asset_in_key}_classified.tif",
+        media_type=pystac.MediaType.COG,
+        title=asset_in_key,
         roles=["visual", "data"],
-        extra_fields=raster_info,
     )
 
 
-def to_stac(geotiff_path, item):
-    asset_key_image, asset_image = generate_asset(asset_in_key=item.id, target_dir=geotiff_path)
+def to_stac(geotiff_path: str | Path, item: pystac.Item) -> pystac.Item:
+    """Describe classification rasters and validate all declared STAC extensions.
 
-    asset_key_overview, asset_overview = generate_asset_overview(asset_in_key=item.id, target_dir=geotiff_path)
+    Args:
+        geotiff_path: Classification raster; its overview sits beside it.
+        item: Source Item providing the observation timestamp.
 
+    Returns:
+        A validated STAC 1.1.0 classification Item.
+
+    Raises:
+        pystac.STACValidationError: Output metadata fails schema validation.
+    """
+    pystac.set_stac_version("1.1.0")
+    asset_key_image, asset_image = generate_asset(item.id, geotiff_path)
+    asset_key_overview, asset_overview = generate_asset_overview(item.id, geotiff_path)
     result_item = create_stac_item(
         id=f"{item.id}_classified",
         source=geotiff_path,
+        input_datetime=item.datetime,
         assets={asset_key_image: asset_image, asset_key_overview: asset_overview},
         with_proj=True,
         with_raster=False,
-        properties={},
+        properties={
+            key: item.properties[key]
+            for key in ("start_datetime", "end_datetime")
+            if key in item.properties
+        },
     )
-
+    for asset in result_item.assets.values():
+        path = Path(geotiff_path).parent / asset.href
+        with rasterio.open(path) as source:
+            RasterExtension.ext(asset, add_if_missing=True).bands = [
+                RasterBand(metadata) for metadata in get_raster_info(source)
+            ]
+    result_item.validate()
     return result_item
 
 
 def save_prediction(data, output_href, meta):
-    # Create a mask for the dataset
-    # 0 in data becomes 0 in mask (invalid), all other values become 255 (valid)
-    mask = np.where(data == 0, 0, data).astype(np.uint8)
 
     meta.update(
         {
@@ -159,12 +184,12 @@ def save_prediction(data, output_href, meta):
             "tiled": True,
             "compress": "deflate",
             "interleave": "band",
-            "nodata": 10,  # Setting nodata to -1 for this example
+            "nodata": 10,
         }
     )
 
     with rasterio.open(output_href, "w", **meta) as dst:
-        dst.write(data, indexes=1)
+        dst.write(np.where(np.isfinite(data), data, 10).astype(np.uint8), indexes=1)
         # Apply colormap to the data
         dst.write_colormap(
             1,
@@ -185,12 +210,13 @@ def save_prediction(data, output_href, meta):
         cmap = dst.colormap(1)
         assert cmap[0] == (34, 139, 34, 255)
 
-        dst.build_overviews([2, 4, 8, 16, 32, 64], Resampling.nearest)
+        factors = [f for f in [2, 4, 8, 16, 32, 64] if min(dst.shape) // f >= 1]
+        if factors:
+            dst.build_overviews(factors, Resampling.nearest)
         dst.update_tags(ns="rio_overview", resampling="nearest")
 
 
 def save_overview(data, output_href, meta):
-    mask = np.where(data == 0, 0, 255).astype(np.uint8)
     meta.update(
         {
             "driver": "COG",
@@ -201,11 +227,11 @@ def save_overview(data, output_href, meta):
             "tiled": True,
             "compress": "LZW",
             "interleave": "band",
-            "nodata": 10,  # Setting nodata to 0 for this example
+            "nodata": 10,
         }
     )
     with rasterio.open(output_href, "w", **meta) as dst:
-        dst.write(data, indexes=1)
+        dst.write(np.where(np.isfinite(data), data, 10).astype(np.uint8), indexes=1)
         dst.write_colormap(
             1,
             {
@@ -223,16 +249,27 @@ def save_overview(data, output_href, meta):
         )
         cmap = dst.colormap(1)
         assert cmap[0] == (34, 139, 34, 255)
-        dst.build_overviews([2, 4, 8, 16, 32, 64], Resampling.nearest)
+        factors = [f for f in [2, 4, 8, 16, 32, 64] if min(dst.shape) // f >= 1]
+        if factors:
+            dst.build_overviews(factors, Resampling.nearest)
         dst.update_tags(ns="rio_overview", resampling="nearest")
 
 
-def create_stac_catalog(item: pystac.Item):
+def create_stac_catalog(item: pystac.Item) -> None:
+    """Save a validated STAC 1.1.0 catalog and move its classification assets.
+
+    Args:
+        item: Source Item whose classification rasters are in the current directory.
+    """
     out_item = to_stac(f"{item.id}_classified.tif", item)
-    logger.info(f"Creating a STAC Catalog for the segmentation result")
-    cat = pystac.Catalog(id="catalog", description="segmentation result", title="segmentation result")
+    logger.info("Creating a STAC Catalog for the segmentation result")
+    cat = pystac.Catalog(
+        id="catalog", description="segmentation result", title="segmentation result"
+    )
     cat.add_items([out_item])
-    cat.normalize_and_save(root_href=os.getcwd(), catalog_type=pystac.CatalogType.SELF_CONTAINED)
+    cat.normalize_hrefs(os.getcwd())
+    cat.validate_all()
+    cat.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
     move(
         f"{item.id}_classified.tif",
         os.path.join(out_item.id, f"{item.id}_classified.tif"),
@@ -246,36 +283,35 @@ def create_stac_catalog(item: pystac.Item):
 def get_asset(item, common_name):
     """Returns the asset of a STAC Item defined with its common band name"""
     for key, asset in item.get_assets().items():
-        if not "data" in asset.to_dict()["roles"]:
+        if "data" not in (asset.roles or []):
             continue
 
         eo_asset = pystac.extensions.eo.AssetEOExtension(asset)
         if not eo_asset.bands:
             continue
         for b in eo_asset.bands:
-
-            if "name" in b.properties.keys() and common_name in b.properties["name"]:
+            if "name" in b.properties and common_name == b.properties["name"]:
                 signed_href = sign(asset.get_absolute_href())
                 return signed_href, key
+    raise ValueError(f"STAC item is missing required band {common_name}")
 
 
 def item_filter_assets(item):
 
     bands = [
-        
-        "B01",  #"coastal"
-        "B02",  #"blue"
-        "B03",  #"green"
-        "B04",  #"red"
-        "B05",  #"rededge70"
-        "B06",  #"rededge74"
-        "B07",  #"rededge78"
-        "B08",  #"nir"
-        "B8A",  #"nir08"
-        "B09",  #"nir09"
-        #"B10",  # cirrus
-        "B11",  #"swir16"
-        "B12",  #"swir22"
+        "B01",  # "coastal"
+        "B02",  # "blue"
+        "B03",  # "green"
+        "B04",  # "red"
+        "B05",  # "rededge70"
+        "B06",  # "rededge74"
+        "B07",  # "rededge78"
+        "B08",  # "nir"
+        "B8A",  # "nir08"
+        "B09",  # "nir09"
+        # "B10",  # cirrus
+        "B11",  # "swir16"
+        "B12",  # "swir22"
         # "coastal",  "B01"
         # "blue",   "B02"
         # "green", "B03"
@@ -289,19 +325,17 @@ def item_filter_assets(item):
         # #"cirrus", # B10
         # "B11",  #"swir16"
         # "B12",  #"swir22"
-        
     ]
     desirable_assets = {}
     for band in bands:
-
         desirable_assets[band], key = get_asset(item, band)
         print(f"Asset href {desirable_assets[band]} with common name {band} found")
     assert len(desirable_assets) > 0, "Item has no desirable asset"
     return desirable_assets
 
 
-def resize_and_convert_to_cog(key, asset_path, target_resolution=10):
-    output_file = f'./{key}.tif'
+def resize_and_convert_to_cog(key, asset_path, target_resolution=10, output_dir="."):
+    output_file = os.path.join(output_dir, f"{key}.tif")
     with rasterio.open(asset_path) as src:
         src_transform = src.transform
         if src_transform.a > target_resolution:
@@ -317,7 +351,9 @@ def resize_and_convert_to_cog(key, asset_path, target_resolution=10):
             )
 
             # Update the metadata for the transformed dataset
-            transform = src.transform * src.transform.scale((src.width / data.shape[-1]), (src.height / data.shape[-2]))
+            transform = src.transform * src.transform.scale(
+                (src.width / data.shape[-1]), (src.height / data.shape[-2])
+            )
             profile = src.profile
             profile.update(
                 {
@@ -369,9 +405,8 @@ def sliding(shape, window_size, step_size=None, fixed=True):
         for x in range(0, w, w_step):
             h_min = min(h_wind, h - y)
             w_min = min(w_wind, w - x)
-            if fixed:
-                if h_min < h_wind or w_min < w_wind:
-                    continue
+            if fixed and (h_min < h_wind or w_min < w_wind):
+                continue
             window = Window(x, y, w_min, h_min)
             windows.append(window)
 
@@ -392,9 +427,10 @@ def stack_separated_bands(window, srcs, block_shape=(12, 64, 64)):
     """
     bands = srcs.keys()
 
-    block = np.empty(block_shape, dtype=np.uint16)
+    block = np.zeros(block_shape, dtype=np.float32)
     for i, band_name in enumerate(bands):
-        block[i, :, :] = srcs[band_name].read(1, window=window)
+        data = srcs[band_name].read(1, window=window, masked=True).filled(0)
+        block[i, : data.shape[0], : data.shape[1]] = data
 
     return block
 
@@ -412,4 +448,9 @@ def predict(input_array, session, input_name, output_name):
         input_array = np.transpose(input_array, (0, 2, 3, 1)).astype(np.float32)
         pred = session.run([output_name], {input_name: input_array})[0]
         prediction_block[:, :] = np.argmax(pred[0], axis=-1)
+    prediction_block[
+        np.all(input_array[0] == 0, axis=-1)
+        if input_array.ndim == 4
+        else np.all(input_array == 0, axis=0)
+    ] = 10
     return prediction_block
