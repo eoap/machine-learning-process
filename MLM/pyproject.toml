@@ -34,6 +34,7 @@ allow-direct-references = true
 path = "hatch/envs/mlm"
 
 [tool.hatch.envs.prod]
+python = "3.12"
 path = "hatch/envs/mlm"
 dependencies = [
     "pystac",

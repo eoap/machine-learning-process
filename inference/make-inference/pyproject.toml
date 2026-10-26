@@ -62,6 +62,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.prod]
+python = "3.12"
 path = "/code/envs/make_inference"
 dependencies = [
     "click",
