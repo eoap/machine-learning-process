@@ -161,7 +161,7 @@ jobs:
           cp "${{ matrix.cwl_path }}" "downloads/${{ matrix.name }}.${{ needs.version.outputs.app-version }}.cwl"
 
       - name: Upload CWL as Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: application-package-${{ matrix.name }}
           path: downloads
