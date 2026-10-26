@@ -21,7 +21,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v2
         with:
@@ -38,7 +38,7 @@ jobs:
     outputs:
       app-version: ${{ steps.set-version.outputs.version }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
       - id: set-version
         run: |
@@ -64,7 +64,7 @@ jobs:
           - name: inference
             path: make-inference
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -90,7 +90,7 @@ jobs:
     outputs:
       upload_url: ${{ steps.create.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
       - name: Create GitHub Release
         id: create
@@ -120,7 +120,7 @@ jobs:
             step: inference
             cwl_path: inference/app-package/tile-sat-inference.cwl
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
       - name: Pull Image and Extract Digest
         id: digest
