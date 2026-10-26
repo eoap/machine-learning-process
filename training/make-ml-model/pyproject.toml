@@ -81,6 +81,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.prod]
+python = "3.12"
 path = "/code/envs/env_5"
 dependencies = [
     "click",
